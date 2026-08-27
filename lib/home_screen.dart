@@ -14,6 +14,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   int _salawatCount = 0;
   Map<String, dynamic>? _daily;
+  List<DailyContent> _verses = [];
   List<DailyContent> _hadiths = [];
   List<DailyContent> _martyrs = [];
   List<DailyContent> _nahj = [];
@@ -30,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadData() async {
     Map<String, dynamic>? daily;
+    List<DailyContent> verses = [];
     List<DailyContent> hadiths = [];
     List<DailyContent> martyrs = [];
     List<DailyContent> nahj = [];
@@ -37,6 +39,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       daily = await DatabaseHelper.getDailyContent();
+
+      final vRows = await DatabaseHelper.getAllVerses();
+      verses = vRows
+          .map((e) => DailyContent(
+              title: 'آیه ${_s(e['ayah'])}',
+              arabic: _s(e['arabic']),
+              persian: _s(e['farsi']),
+              source: _s(e['ref'])))
+          .toList();
 
       final hRows = await DatabaseHelper.getAllHadiths();
       hadiths = hRows
@@ -73,10 +84,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() {
       _daily = daily;
+      _verses = verses;
       _hadiths = hadiths;
       _martyrs = martyrs;
       _nahj = nahj;
-      _error = (daily == null || error != null) ? (error ?? 'دیتابیس خالی است') : null;
+      _error =
+          (daily == null || error != null) ? (error ?? 'دیتابیس خالی است') : null;
       _loading = false;
     });
   }
@@ -137,9 +150,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final v = _daily!['verse'];
-    final h = _daily!['hadith'];
-    final m = _daily!['martyr'];
+    final v = _daily?['verse'];
+    final h = _daily?['hadith'];
+    final m = _daily?['martyr'];
 
     final verseCard = DailyContent(
         title: 'آیه روز',
@@ -164,11 +177,40 @@ class _HomeScreenState extends State<HomeScreen> {
         source: m != null ? _s(m['name']) : '');
 
     final pages = <Widget>[
-      _DailyCardsPage(
-          verse: verseCard, hadith: hadithCard, martyr: martyrCard),
-      _ListContentPage(items: _hadiths, heading: 'احادیث'),
-      _ListContentPage(items: _martyrs, heading: 'وصایای شهدا'),
-      _ListContentPage(items: _nahj, heading: 'حکمت‌های نهج‌البلاغه'),
+      // Index 0 = خانه (Home) — no longer the آیه page
+      _HomePage(
+        verse: verseCard,
+        hadith: hadithCard,
+        martyr: martyrCard,
+        salawatCount: _salawatCount,
+        onSalawatTap: () => setState(() {
+          _salawatCount++;
+        }),
+        onBrowseVerses: () => setState(() => _currentIndex = 1),
+        onBrowseHadiths: () => setState(() => _currentIndex = 2),
+        onBrowseMartyrs: () => setState(() => _currentIndex = 3),
+        onBrowseNahj: () => setState(() => _currentIndex = 4),
+      ),
+      _ListContentPage(
+          items: _verses,
+          heading: 'آیات',
+          emptyText: 'آیه‌ای یافت نشد',
+          icon: Icons.menu_book),
+      _ListContentPage(
+          items: _hadiths,
+          heading: 'احادیث',
+          emptyText: 'حدیثی یافت نشد',
+          icon: Icons.format_quote),
+      _ListContentPage(
+          items: _martyrs,
+          heading: 'وصایای شهدا',
+          emptyText: 'وصیتی یافت نشد',
+          icon: Icons.volunteer_activism),
+      _ListContentPage(
+          items: _nahj,
+          heading: 'حکمت‌های نهج‌البلاغه',
+          emptyText: 'حکمتی یافت نشد',
+          icon: Icons.auto_stories),
       _SalawatPage(
         count: _salawatCount,
         onIncrement: () => setState(() => _salawatCount++),
@@ -205,9 +247,13 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
           BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'خانه'),
+          BottomNavigationBarItem(
               icon: Icon(Icons.menu_book_outlined),
               activeIcon: Icon(Icons.menu_book),
-              label: 'آیه'),
+              label: 'آیات'),
           BottomNavigationBarItem(
               icon: Icon(Icons.format_quote_outlined),
               activeIcon: Icon(Icons.format_quote),
@@ -238,7 +284,7 @@ class _HodaLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipOval(
       child: Image.asset(
-        'assets/brand/hoda-logo.jpg',
+        'assets/brand/app-profile.png',
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -260,64 +306,287 @@ class _HodaLogo extends StatelessWidget {
   }
 }
 
-class ContentCard extends StatelessWidget {
-  final DailyContent content;
-  final Color borderColor;
-  final IconData icon;
+/// The new, welcoming "خانه" (Home) page — the real landing tab.
+class _HomePage extends StatelessWidget {
+  final DailyContent verse;
+  final DailyContent hadith;
+  final DailyContent martyr;
+  final int salawatCount;
+  final VoidCallback onSalawatTap;
+  final VoidCallback onBrowseVerses;
+  final VoidCallback onBrowseHadiths;
+  final VoidCallback onBrowseMartyrs;
+  final VoidCallback onBrowseNahj;
 
-  const ContentCard(
-      {super.key,
-      required this.content,
-      required this.borderColor,
-      required this.icon});
+  const _HomePage({
+    required this.verse,
+    required this.hadith,
+    required this.martyr,
+    required this.salawatCount,
+    required this.onSalawatTap,
+    required this.onBrowseVerses,
+    required this.onBrowseHadiths,
+    required this.onBrowseMartyrs,
+    required this.onBrowseNahj,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: borderColor, width: 1.6),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: borderColor, size: 22),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(content.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold, color: borderColor)),
-                ),
-              ],
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      children: [
+        // Greeting hero
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [HodaColors.forestGreen, HodaColors.turquoise],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 14),
-            if (content.arabic.isNotEmpty) ...[
-              Text(content.arabic,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(height: 1.9, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              Divider(color: borderColor.withOpacity(0.4)),
-              const SizedBox(height: 12),
-            ],
-            Text(content.persian,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge),
-            if (content.source.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(content.source,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.tertiary,
-                        fontWeight: FontWeight.w600)),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: HodaColors.turquoise.withOpacity(0.25),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
             ],
+          ),
+          child: Column(
+            children: [
+              const _HodaLogo(size: 92),
+              const SizedBox(height: 14),
+              Text('به هُدا خوش آمدید',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  )),
+              const SizedBox(height: 6),
+              Text('همراه معنوی روزانه شما',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withOpacity(0.9),
+                  )),
+              const SizedBox(height: 20),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.touch_app,
+                        color: Colors.white70, size: 18),
+                    const SizedBox(width: 8),
+                    Text('برای نمایش امروز، لمس کنید',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.white)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+
+        // "Content of the day" section header
+        _SectionHeader(
+          icon: Icons.wb_sunny_outlined,
+          title: 'محتوای امروز',
+          action: Text(
+            _todayFa(),
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.tertiary,
+                fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ContentCard(
+            content: verse,
+            borderColor: HodaColors.gold,
+            icon: Icons.menu_book,
+            onTap: onBrowseVerses),
+        const SizedBox(height: 12),
+        ContentCard(
+            content: hadith,
+            borderColor: HodaColors.turquoise,
+            icon: Icons.format_quote,
+            onTap: onBrowseHadiths),
+        const SizedBox(height: 12),
+        ContentCard(
+            content: martyr,
+            borderColor: HodaColors.gold,
+            icon: Icons.volunteer_activism,
+            onTap: onBrowseMartyrs),
+        const SizedBox(height: 20),
+
+        // Quick actions grid
+        _SectionHeader(
+            icon: Icons.auto_awesome_outlined, title: 'کاوش کنید'),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.5,
+          children: [
+            _QuickTile(
+              icon: Icons.menu_book,
+              title: 'آیات',
+              subtitle: '${verseCountHint()} آیه',
+              color: HodaColors.gold,
+              onTap: onBrowseVerses,
+            ),
+            _QuickTile(
+              icon: Icons.format_quote,
+              title: 'احادیث',
+              subtitle: '${hadithCountHint()} حدیث',
+              color: HodaColors.turquoise,
+              onTap: onBrowseHadiths,
+            ),
+            _QuickTile(
+              icon: Icons.volunteer_activism,
+              title: 'وصایا',
+              subtitle: 'وصایای شهدا',
+              color: HodaColors.gold,
+              onTap: onBrowseMartyrs,
+            ),
+            _QuickTile(
+              icon: Icons.auto_stories,
+              title: 'حکمت',
+              subtitle: 'نهج‌البلاغه',
+              color: HodaColors.turquoise,
+              onTap: onBrowseNahj,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Salawat quick shortcut
+        InkWell(
+          onTap: onSalawatTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: HodaColors.gold, width: 1.4),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.favorite,
+                    color: HodaColors.gold, size: 26),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ذکر صلوات',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text('تسبیح برای آرامش قلب',
+                          style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+                Text('$salawatCount',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: HodaColors.turquoise)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  static String _todayFa() {
+    const week = [
+      'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه',
+      'چهارشنبه', 'پنجشنبه', 'جمعه'
+    ];
+    return week[DateTime.now().weekday % 7];
+  }
+
+  static int verseCountHint() => 130;
+  static int hadithCountHint() => 40;
+}
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget? action;
+  const _SectionHeader({required this.icon, required this.title, this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: theme.colorScheme.tertiary),
+        const SizedBox(width: 8),
+        Text(title,
+            style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold)),
+        const Spacer(),
+        if (action != null) action!,
+      ],
+    );
+  }
+}
+
+class _QuickTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+  const _QuickTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withOpacity(0.5), width: 1.2),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 10),
+            Text(title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.tertiary)),
           ],
         ),
       ),
@@ -325,46 +594,77 @@ class ContentCard extends StatelessWidget {
   }
 }
 
-class _DailyCardsPage extends StatelessWidget {
-  final DailyContent verse;
-  final DailyContent hadith;
-  final DailyContent martyr;
+class ContentCard extends StatelessWidget {
+  final DailyContent content;
+  final Color borderColor;
+  final IconData icon;
+  final VoidCallback? onTap;
 
-  const _DailyCardsPage(
-      {required this.verse, required this.hadith, required this.martyr});
+  const ContentCard(
+      {super.key,
+      required this.content,
+      required this.borderColor,
+      required this.icon,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      children: [
-        Center(
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: borderColor, width: 1.6),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _HodaLogo(size: 84),
-              const SizedBox(height: 12),
-              Text('به هُدا خوش آمدید',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text('همراه معنوی روزانه شما',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.tertiary)),
+              Row(
+                children: [
+                  Icon(icon, color: borderColor, size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(content.title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: borderColor)),
+                  ),
+                  if (onTap != null)
+                    Icon(Icons.arrow_forward_ios,
+                        size: 14, color: borderColor),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (content.arabic.isNotEmpty) ...[
+                Text(content.arabic,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(height: 1.9, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Divider(color: borderColor.withOpacity(0.4)),
+                const SizedBox(height: 12),
+              ],
+              Text(content.persian,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge),
+              if (content.source.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(content.source,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.tertiary,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        ContentCard(content: verse, borderColor: HodaColors.gold, icon: Icons.menu_book),
-        const SizedBox(height: 16),
-        ContentCard(
-            content: hadith,
-            borderColor: HodaColors.turquoise,
-            icon: Icons.format_quote),
-        const SizedBox(height: 16),
-        ContentCard(
-            content: martyr,
-            borderColor: HodaColors.gold,
-            icon: Icons.volunteer_activism),
-      ],
+      ),
     );
   }
 }
@@ -372,13 +672,19 @@ class _DailyCardsPage extends StatelessWidget {
 class _ListContentPage extends StatelessWidget {
   final List<DailyContent> items;
   final String heading;
-  const _ListContentPage({required this.items, required this.heading});
+  final String emptyText;
+  final IconData icon;
+  const _ListContentPage(
+      {required this.items,
+      required this.heading,
+      required this.emptyText,
+      required this.icon});
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return Center(
-        child: Text('محتوایی موجود نیست',
+        child: Text(emptyText,
             style: Theme.of(context).textTheme.titleMedium),
       );
     }
@@ -401,7 +707,7 @@ class _ListContentPage extends StatelessWidget {
             content: items[index - 1],
             borderColor:
                 index.isEven ? HodaColors.turquoise : HodaColors.gold,
-            icon: Icons.auto_stories);
+            icon: icon);
       },
     );
   }
@@ -515,6 +821,9 @@ class _SettingsSheet extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: 8),
+            const Text('نسخه ۰.۰.۴',
+                style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
       ),

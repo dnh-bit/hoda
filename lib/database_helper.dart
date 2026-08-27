@@ -78,6 +78,11 @@ class DatabaseHelper {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> getAllVerses() async {
+    final db = await database;
+    return await db.query('verses');
+  }
+
   static Future<List<Map<String, dynamic>>> getAllHadiths() async {
     final db = await database;
     return await db.query('hadiths');

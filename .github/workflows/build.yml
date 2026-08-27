@@ -24,14 +24,41 @@ jobs:
           flutter-version: '3.24.5'
           channel: 'stable'
 
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          echo "version=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: hoda-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # Automatically archive every build as a GitHub Release
+      - name: Create Release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="v$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d ' ')"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — updating assets"
+            gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes "نسخه $TAG از اپلیکیشن هُدا — بیلد خودکار" \
+              build/app/outputs/flutter-apk/app-release.apk
+          fi

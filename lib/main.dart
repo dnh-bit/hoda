@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
 import 'home_screen.dart';
@@ -119,9 +120,16 @@ class HodaApp extends StatelessWidget {
           theme: HodaTheme.light,
           darkTheme: HodaTheme.dark,
           themeMode: mode,
-          // RTL layout for Persian content (text renders RTL natively via bidi).
-          builder: (context, child) => Directionality(
-              textDirection: TextDirection.rtl, child: child!),
+          locale: const Locale('fa', 'IR'),
+          supportedLocales: const [
+            Locale('fa', 'IR'),
+            Locale('en', 'US'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           home: const HomeScreen(),
         );
       },

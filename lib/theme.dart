@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class HodaColors {
   static const Color deepGreen = Color(0xFF0B3D2E);
@@ -16,10 +15,26 @@ class HodaColors {
 class HodaTheme {
   HodaTheme._();
 
-  static TextTheme _textTheme(TextTheme base, Color color) {
-    return GoogleFonts.vazirmatnTextTheme(base).apply(
-      bodyColor: color,
-      displayColor: color,
+  static const String fontFamily = 'Vazirmatn';
+  static const String displayFontFamily = 'Lalezar';
+
+  static TextTheme _textTheme(Color color) {
+    return TextTheme(
+      displayLarge: TextStyle(fontFamily: fontFamily, fontSize: 57, fontWeight: FontWeight.w400, color: color),
+      displayMedium: TextStyle(fontFamily: fontFamily, fontSize: 45, fontWeight: FontWeight.w400, color: color),
+      displaySmall: TextStyle(fontFamily: fontFamily, fontSize: 36, fontWeight: FontWeight.w400, color: color),
+      headlineLarge: TextStyle(fontFamily: fontFamily, fontSize: 32, fontWeight: FontWeight.w600, color: color),
+      headlineMedium: TextStyle(fontFamily: fontFamily, fontSize: 28, fontWeight: FontWeight.w600, color: color),
+      headlineSmall: TextStyle(fontFamily: fontFamily, fontSize: 24, fontWeight: FontWeight.w600, color: color),
+      titleLarge: TextStyle(fontFamily: fontFamily, fontSize: 22, fontWeight: FontWeight.w600, color: color),
+      titleMedium: TextStyle(fontFamily: fontFamily, fontSize: 16, fontWeight: FontWeight.w600, color: color),
+      titleSmall: TextStyle(fontFamily: fontFamily, fontSize: 14, fontWeight: FontWeight.w600, color: color),
+      bodyLarge: TextStyle(fontFamily: fontFamily, fontSize: 16, fontWeight: FontWeight.w400, color: color, height: 1.8),
+      bodyMedium: TextStyle(fontFamily: fontFamily, fontSize: 14, fontWeight: FontWeight.w400, color: color, height: 1.7),
+      bodySmall: TextStyle(fontFamily: fontFamily, fontSize: 12, fontWeight: FontWeight.w400, color: color, height: 1.6),
+      labelLarge: TextStyle(fontFamily: fontFamily, fontSize: 14, fontWeight: FontWeight.w600, color: color),
+      labelMedium: TextStyle(fontFamily: fontFamily, fontSize: 12, fontWeight: FontWeight.w600, color: color),
+      labelSmall: TextStyle(fontFamily: fontFamily, fontSize: 11, fontWeight: FontWeight.w600, color: color),
     );
   }
 
@@ -36,15 +51,12 @@ class HodaTheme {
       tertiary: HodaColors.gold,
     );
 
-    final base = ThemeData(
+    return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: scheme,
       scaffoldBackgroundColor: HodaColors.cream,
-    );
-
-    return base.copyWith(
-      textTheme: _textTheme(base.textTheme, HodaColors.inkGreen),
+      textTheme: _textTheme(HodaColors.inkGreen),
       appBarTheme: const AppBarTheme(
         backgroundColor: HodaColors.forestGreen,
         foregroundColor: HodaColors.cream,
@@ -81,15 +93,12 @@ class HodaTheme {
       tertiary: HodaColors.goldLight,
     );
 
-    final base = ThemeData(
+    return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
       scaffoldBackgroundColor: HodaColors.deepGreen,
-    );
-
-    return base.copyWith(
-      textTheme: _textTheme(base.textTheme, HodaColors.cream),
+      textTheme: _textTheme(HodaColors.cream),
       appBarTheme: const AppBarTheme(
         backgroundColor: HodaColors.deepGreen,
         foregroundColor: HodaColors.goldLight,
@@ -114,7 +123,8 @@ class HodaTheme {
   }
 
   static TextStyle appNameStyle(BuildContext context, {double size = 30}) {
-    return GoogleFonts.lalezar(
+    return TextStyle(
+      fontFamily: displayFontFamily,
       fontSize: size,
       letterSpacing: 1.0,
       color: Theme.of(context).appBarTheme.foregroundColor,
@@ -126,10 +136,6 @@ class ThemeController {
   ThemeController._();
   static final ValueNotifier<ThemeMode> mode =
       ValueNotifier<ThemeMode>(ThemeMode.light);
-
-  static const String _prefsKey = 'hoda_theme_is_dark';
-
-  static Future<void> load() async {}
 
   static void toggle() {
     mode.value =

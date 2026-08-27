@@ -17,48 +17,65 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, dbName);
 
-    final file = File(path);
-    if (!await file.exists()) {
+    try {
+      final file = File(path);
+      if (!await file.exists()) {
+        final data = await rootBundle.load('assets/hoda.db');
+        final bytes = data.buffer.asUint8List();
+        await file.writeAsBytes(bytes, flush: true);
+      }
+      // Verify the copied db is readable; if corrupt, re-copy
+      final test = await openDatabase(path, version: 1);
+      final count = (await test.rawQuery('SELECT COUNT(*) as c FROM verses')).first['c'] as int;
+      await test.close();
+      if (count == 0) throw Exception('db empty, re-copying');
+      return await openDatabase(path, version: 1);
+    } catch (e) {
+      // Corrupt or missing: force fresh copy
+      final file = File(path);
+      if (await file.exists()) await file.delete();
       final data = await rootBundle.load('assets/hoda.db');
       final bytes = data.buffer.asUint8List();
-      await file.writeAsBytes(bytes);
+      await file.writeAsBytes(bytes, flush: true);
+      return await openDatabase(path, version: 1);
     }
-
-    return await openDatabase(path, version: 1);
   }
 
-  static Future<Map<String, dynamic>> getDailyContent() async {
-    final db = await database;
+  /// Pick one row by day-of-year so content rotates daily.
+  static Future<List<Map<String, dynamic>>> _pickDaily(
+      Database db, String table) async {
     final today = DateTime.now();
     final dayOfYear = today.difference(DateTime(today.year, 1, 1)).inDays;
-
-    final verseCount = (await db.rawQuery('SELECT COUNT(*) as c FROM verses')).first['c'] as int;
-    final hadithCount = (await db.rawQuery('SELECT COUNT(*) as c FROM hadiths')).first['c'] as int;
-    final nahjCount = (await db.rawQuery('SELECT COUNT(*) as c FROM nahj_wisdoms')).first['c'] as int;
-    final martyrCount = (await db.rawQuery('SELECT COUNT(*) as c FROM martyrs')).first['c'] as int;
-
-    final verse = (await db.query('verses', limit: 1, offset: dayOfYear % verseCount)).first;
-    final hadith = (await db.query('hadiths', limit: 1, offset: dayOfYear % hadithCount)).first;
-    final nahj = (await db.query('nahj_wisdoms', limit: 1, offset: dayOfYear % nahjCount)).first;
-    final martyr = (await db.query('martyrs', limit: 1, offset: dayOfYear % martyrCount)).first;
-
-    final daysFa = ['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه'];
-    final dayIndex = today.weekday % 7;
-    final zekrRows = await db.query('zekr', where: 'day = ?', whereArgs: [daysFa[dayIndex]]);
-    final zekr = zekrRows.isNotEmpty ? zekrRows.first : (await db.query('zekr', limit: 1)).first;
-
-    return {
-      'verse': verse,
-      'hadith': hadith,
-      'nahj': nahj,
-      'martyr': martyr,
-      'zekr': zekr,
-    };
+    final rows = await db.query(table);
+    if (rows.isEmpty) return [];
+    return [rows[dayOfYear % rows.length]];
   }
 
-  static Future<List<Map<String, dynamic>>> getAllVerses() async {
-    final db = await database;
-    return await db.query('verses');
+  static Future<Map<String, dynamic>?> getDailyContent() async {
+    try {
+      final db = await database;
+
+      final verseRows = await _pickDaily(db, 'verses');
+      final hadithRows = await _pickDaily(db, 'hadiths');
+      final nahjRows = await _pickDaily(db, 'nahj_wisdoms');
+      final martyrRows = await _pickDaily(db, 'martyrs');
+
+      // Zekr by Persian weekday name
+      const daysFa = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
+      final dayIndex = DateTime.now().weekday % 7;
+      var zekrRows = await db.query('zekr', where: 'day = ?', whereArgs: [daysFa[dayIndex]]);
+      zekrRows = zekrRows.isNotEmpty ? zekrRows : await db.query('zekr', limit: 1);
+
+      return {
+        'verse': verseRows.isNotEmpty ? verseRows.first : null,
+        'hadith': hadithRows.isNotEmpty ? hadithRows.first : null,
+        'nahj': nahjRows.isNotEmpty ? nahjRows.first : null,
+        'martyr': martyrRows.isNotEmpty ? martyrRows.first : null,
+        'zekr': zekrRows.isNotEmpty ? zekrRows.first : null,
+      };
+    } catch (e) {
+      return null; // caller shows fallback UI
+    }
   }
 
   static Future<List<Map<String, dynamic>>> getAllHadiths() async {
@@ -66,23 +83,13 @@ class DatabaseHelper {
     return await db.query('hadiths');
   }
 
-  static Future<List<Map<String, dynamic>>> getAllNahj() async {
-    final db = await database;
-    return await db.query('nahj_wisdoms');
-  }
-
   static Future<List<Map<String, dynamic>>> getAllMartyrs() async {
     final db = await database;
     return await db.query('martyrs');
   }
 
-  static Future<List<Map<String, dynamic>>> getAllZekr() async {
+  static Future<List<Map<String, dynamic>>> getAllNahj() async {
     final db = await database;
-    return await db.query('zekr');
-  }
-
-  static Future<List<Map<String, dynamic>>> getAllSalawat() async {
-    final db = await database;
-    return await db.query('salawat');
+    return await db.query('nahj_wisdoms');
   }
 }

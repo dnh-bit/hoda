@@ -6,13 +6,22 @@ import 'home_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final prefs = await SharedPreferences.getInstance();
-  final savedIsDark = prefs.getBool('hoda_theme_is_dark') ?? false;
-  ThemeController.mode.value = savedIsDark ? ThemeMode.dark : ThemeMode.light;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIsDark = prefs.getBool('hoda_theme_is_dark') ?? false;
+    ThemeController.mode.value =
+        savedIsDark ? ThemeMode.dark : ThemeMode.light;
 
-  ThemeController.mode.addListener(() async {
-    await prefs.setBool('hoda_theme_is_dark', ThemeController.mode.value == ThemeMode.dark);
-  });
+    ThemeController.mode.addListener(() async {
+      try {
+        final p = await SharedPreferences.getInstance();
+        await p.setBool(
+            'hoda_theme_is_dark', ThemeController.mode.value == ThemeMode.dark);
+      } catch (_) {}
+    });
+  } catch (_) {
+    // prefs unavailable: run with default theme
+  }
 
   runApp(const HodaApp());
 }
@@ -33,7 +42,8 @@ class HodaApp extends StatelessWidget {
           themeMode: mode,
           locale: const Locale('fa', 'IR'),
           supportedLocales: const [Locale('fa', 'IR'), Locale('en', 'US')],
-          builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
+          builder: (context, child) => Directionality(
+              textDirection: TextDirection.rtl, child: child!),
           home: const HomeScreen(),
         );
       },

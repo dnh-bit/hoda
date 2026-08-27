@@ -51,7 +51,7 @@ class HodaTheme {
         elevation: 0,
         centerTitle: true,
       ),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: HodaColors.creamCard,
         elevation: 2,
         shape: RoundedRectangleBorder(
@@ -96,7 +96,7 @@ class HodaTheme {
         elevation: 0,
         centerTitle: true,
       ),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: HodaColors.forestGreen,
         elevation: 3,
         shape: RoundedRectangleBorder(

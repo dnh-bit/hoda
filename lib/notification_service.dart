@@ -85,7 +85,7 @@ class NotificationService {
 
   static void _initTimezones() {
     if (_tzReady) return;
-    tzdata.initializeTimezones();
+    tzdata.initializeTimeZones();
     try {
       tz.setLocalLocation(tz.getLocation('Asia/Tehran'));
     } catch (_) {
@@ -146,6 +146,8 @@ class NotificationService {
       scheduled,
       _details(),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
       payload: type,
     );

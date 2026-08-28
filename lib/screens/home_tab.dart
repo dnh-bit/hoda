@@ -11,25 +11,24 @@ import '../widgets/section_header.dart';
 import 'content_detail_screen.dart';
 
 /// Home dashboard: greeting header, today's content and quick shortcuts.
+///
+/// The salawat counter is intentionally *not* here: it lives as a compact badge
+/// in the home AppBar (see HomeScreen) so it is reachable from every tab.
 class HomeTab extends StatelessWidget {
   final HodaContent content;
-  final int salawatToday;
   final VoidCallback onOpenVerses;
   final VoidCallback onOpenHadiths;
   final VoidCallback onOpenMartyrs;
   final VoidCallback onOpenNahj;
-  final VoidCallback onOpenSalawat;
   final Future<void> Function() onRefresh;
 
   const HomeTab({
     super.key,
     required this.content,
-    required this.salawatToday,
     required this.onOpenVerses,
     required this.onOpenHadiths,
     required this.onOpenMartyrs,
     required this.onOpenNahj,
-    required this.onOpenSalawat,
     required this.onRefresh,
   });
 
@@ -150,8 +149,6 @@ class HomeTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _buildSalawatCard(theme),
-          const SizedBox(height: 8),
         ],
       ),
     );
@@ -215,51 +212,6 @@ class HomeTab extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSalawatCard(ThemeData theme) {
-    return InkWell(
-      onTap: onOpenSalawat,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: HodaColors.gold, width: 1.4),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.favorite, color: HodaColors.gold, size: 26),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ذکر صلوات شمار',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'صلوات امروز شما',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              FaNum.number(salawatToday),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: HodaColors.turquoise,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

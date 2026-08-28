@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hoda/app.dart';
+import 'package:hoda/services/salawat_store.dart';
 import 'package:hoda/utils/fa_num.dart';
 
 void main() {
@@ -19,5 +20,21 @@ void main() {
     final now = DateTime(2026, 1, 10, 12);
     expect(FaNum.relativeDay(DateTime(2026, 1, 10, 8), from: now), 'امروز');
     expect(FaNum.relativeDay(DateTime(2026, 1, 11, 8), from: now), 'فردا');
+  });
+
+  group('SalawatCounts', () {
+    test('increment bumps today and total', () {
+      const counts = SalawatCounts(today: 2, total: 41);
+      final next = counts.incremented();
+      expect(next.today, 3);
+      expect(next.total, 42);
+    });
+
+    test('value equality keeps the AppBar badge from rebuilding', () {
+      expect(const SalawatCounts(today: 1, total: 9),
+          const SalawatCounts(today: 1, total: 9));
+      expect(const SalawatCounts(today: 1, total: 9),
+          isNot(const SalawatCounts(today: 1, total: 10)));
+    });
   });
 }

@@ -35,6 +35,16 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
+
+            // R8 shrinking (on by default for Flutter release builds) strips the
+            // generic signatures Gson needs, which made
+            // flutter_local_notifications throw "Missing type parameter." from
+            // loadScheduledNotifications() on release APKs only. proguard-rules.pro
+            // carries the plugin + Gson keep rules that fix it.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Resource shrinking is left off on purpose: it has bitten font and
+            // raw asset lookups (Amiri/Vazirmatn) in the past.
+            shrinkResources false
         }
     }
 }

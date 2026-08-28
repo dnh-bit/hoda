@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/content_repository.dart';
 import '../services/salawat_store.dart';
 import '../theme/hoda_theme.dart';
+import '../utils/fa_num.dart';
 import '../widgets/hoda_logo.dart';
 import 'content_list_view.dart';
 import 'favorites_screen.dart';
@@ -10,9 +11,14 @@ import 'home_tab.dart';
 import 'salawat_screen.dart';
 import 'settings_screen.dart';
 
-/// App shell: owns the bottom navigation, the loaded content snapshot and the
-/// salawat tally. Secondary pages (favorites, settings, salawat) are pushed as
-/// routes so the bottom bar always reflects the visible tab.
+/// App shell: owns the bottom navigation (خانه، آیات، حدیث، وصایا، حکمت، صلوات)
+/// and the loaded content snapshot.
+///
+/// The salawat tally lives in [SalawatStore]; it is shown as a compact badge in
+/// the AppBar corner (the `leading` slot, i.e. the visual top-right in this RTL
+/// UI) which opens the full-screen counter, and as the «صلوات» tab which embeds
+/// the very same counter widget. Favorites and settings are pushed as routes so
+/// the bottom bar always reflects the visible tab.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -26,10 +32,10 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int tabHadiths = 2;
   static const int tabMartyrs = 3;
   static const int tabNahj = 4;
+  static const int tabSalawat = 5;
 
   int _currentIndex = tabHome;
   HodaContent _content = const HodaContent();
-  SalawatCounts _salawat = SalawatCounts.zero;
   bool _loading = true;
   String? _error;
 
@@ -50,24 +56,21 @@ class _HomeScreenState extends State<HomeScreen> {
       error = e.toString();
     }
 
-    final counts = await SalawatStore.load();
+    // Fills SalawatStore.counts; the AppBar badge listens to it directly.
+    await SalawatStore.ensureLoaded();
 
     if (!mounted) return;
     setState(() {
       _content = content;
-      _salawat = counts;
       _error = error;
       _loading = false;
     });
   }
 
-  Future<void> _openSalawat() async {
-    await Navigator.of(context).push(
+  void _openSalawat() {
+    Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const SalawatScreen()),
     );
-    final counts = await SalawatStore.load();
-    if (!mounted) return;
-    setState(() => _salawat = counts);
   }
 
   void _openFavorites() {
@@ -103,12 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           HomeTab(
             content: _content,
-            salawatToday: _salawat.today,
             onOpenVerses: () => _selectTab(tabVerses),
             onOpenHadiths: () => _selectTab(tabHadiths),
             onOpenMartyrs: () => _selectTab(tabMartyrs),
             onOpenNahj: () => _selectTab(tabNahj),
-            onOpenSalawat: _openSalawat,
             onRefresh: _load,
           ),
           ContentListView(
@@ -135,6 +136,9 @@ class _HomeScreenState extends State<HomeScreen> {
             emptyText: 'حکمتی یافت نشد',
             icon: Icons.auto_stories,
           ),
+          // Same counter widget as the full-screen page opened from the badge;
+          // both read and write the shared SalawatStore tally.
+          const SalawatCounterView(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -167,6 +171,13 @@ class _HomeScreenState extends State<HomeScreen> {
             activeIcon: Icon(Icons.auto_stories),
             label: 'حکمت',
           ),
+          BottomNavigationBarItem(
+            // The nav bar pairs an outlined icon with a filled active one;
+            // touch_app is the counting-gesture icon that has both variants.
+            icon: Icon(Icons.touch_app_outlined),
+            activeIcon: Icon(Icons.touch_app),
+            label: 'صلوات',
+          ),
         ],
       ),
     );
@@ -175,6 +186,11 @@ class _HomeScreenState extends State<HomeScreen> {
   AppBar _buildAppBar() {
     return AppBar(
       titleSpacing: 0,
+      // The UI is RTL (fa_IR), so the *leading* slot is the visual top-right
+      // corner — that is where the salawat badge belongs. The bookmark and
+      // settings actions stay in the opposite corner.
+      leadingWidth: 88,
+      leading: _buildSalawatBadge(),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -186,11 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       actions: [
         IconButton(
-          tooltip: 'ذکر صلوات',
-          icon: const Icon(Icons.favorite_outline),
-          onPressed: _openSalawat,
-        ),
-        IconButton(
           tooltip: 'نشان‌شده‌ها',
           icon: const Icon(Icons.bookmark_outline),
           onPressed: _openFavorites,
@@ -201,6 +212,70 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: _openSettings,
         ),
       ],
+    );
+  }
+
+  /// Compact salawat counter for the AppBar corner: a tap icon + the persisted
+  /// total in Persian digits, tappable to open the full-screen counter.
+  /// Rebuilds itself from [SalawatStore.counts], so a tap on the counter screen
+  /// is reflected here without the shell having to reload anything.
+  Widget _buildSalawatBadge() {
+    final foreground = Theme.of(context).appBarTheme.foregroundColor ??
+        Theme.of(context).colorScheme.onPrimary;
+
+    return ValueListenableBuilder<SalawatCounts>(
+      valueListenable: SalawatStore.counts,
+      builder: (context, counts, _) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(start: 4),
+            child: Tooltip(
+              message: 'صلوات‌شمار — مجموع ${FaNum.number(counts.total)} صلوات',
+              child: Material(
+                color: foreground.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: _openSalawat,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // A tap/count icon, deliberately not a heart.
+                        const Icon(
+                          Icons.ads_click,
+                          size: 17,
+                          color: HodaColors.goldLight,
+                        ),
+                        const SizedBox(width: 5),
+                        // Clamped so a five/six-digit tally cannot overflow the
+                        // fixed leading slot of the AppBar.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 40),
+                          child: Text(
+                            FaNum.number(counts.total),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.fade,
+                            style: TextStyle(
+                              fontFamily: HodaTheme.fontFamily,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: foreground,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -38,6 +38,10 @@ class NotificationService {
   static bool _pluginReady = false;
   static String _zoneName = 'UTC';
 
+  /// Last plugin error that was swallowed instead of thrown at the UI.
+  /// Exposed through [scheduleStatus] for diagnostics only — never fatal.
+  static String? _lastPluginError;
+
   static const String _keyEnabled = 'hoda_notif_enabled';
   static const String _keyHour = 'hoda_notif_hour';
   static const String _keyMinute = 'hoda_notif_minute';
@@ -79,38 +83,49 @@ class NotificationService {
   // ---------------- prefs API ----------------
 
   static Future<bool> isEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyEnabled) ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyEnabled) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<TimeOfDay> getTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    // `%` on ints is euclidean in Dart, so a corrupt negative value still maps
-    // into a valid range instead of throwing inside TimeOfDay.
-    final h = (prefs.getInt(_keyHour) ?? 8) % 24;
-    final m = (prefs.getInt(_keyMinute) ?? 0) % 60;
-    return TimeOfDay(hour: h, minute: m);
+    const fallback = TimeOfDay(hour: 8, minute: 0);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // `%` on ints is euclidean in Dart, so a corrupt negative value still
+      // maps into a valid range instead of throwing inside TimeOfDay.
+      final h = (prefs.getInt(_keyHour) ?? 8) % 24;
+      final m = (prefs.getInt(_keyMinute) ?? 0) % 60;
+      return TimeOfDay(hour: h, minute: m);
+    } catch (_) {
+      return fallback;
+    }
   }
 
   static Future<String> getType() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyType) ?? 'random';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyType) ?? 'random';
+    } catch (_) {
+      return 'random';
+    }
   }
 
   /// Persists the user's choice and (re)arms or cancels the daily schedule.
   ///
   /// Returns the resulting [scheduleStatus] so callers can show the next fire
-  /// time without a second round-trip.
+  /// time without a second round-trip. Never throws: every plugin call is
+  /// guarded, so a broken notification cache can only degrade the returned
+  /// status, never crash the settings screen.
   static Future<Map<String, dynamic>> saveSettings({
     required bool enabled,
     required TimeOfDay time,
     required String type,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyEnabled, enabled);
-    await prefs.setInt(_keyHour, time.hour);
-    await prefs.setInt(_keyMinute, time.minute);
-    await prefs.setString(_keyType, type);
+    await _writePrefs(enabled: enabled, time: time, type: type);
 
     if (!enabled) {
       await _cancelDaily();
@@ -121,7 +136,7 @@ class NotificationService {
     if (!granted) {
       // The user denied the system permission -> store as disabled so the UI
       // reflects reality instead of promising notifications that cannot show.
-      await prefs.setBool(_keyEnabled, false);
+      await _writePrefs(enabled: false, time: time, type: type);
       await _cancelDaily();
       return scheduleStatus();
     }
@@ -133,6 +148,24 @@ class NotificationService {
 
     await _scheduleDaily(time, type);
     return scheduleStatus();
+  }
+
+  /// Best-effort write of the notification prefs.
+  static Future<void> _writePrefs({
+    required bool enabled,
+    required TimeOfDay time,
+    required String type,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyEnabled, enabled);
+      await prefs.setInt(_keyHour, time.hour);
+      await prefs.setInt(_keyMinute, time.minute);
+      await prefs.setString(_keyType, type);
+    } catch (error) {
+      _lastPluginError = 'writePrefs → $error';
+      debugPrint('NotificationService: saving prefs failed → $error');
+    }
   }
 
   /// Re-arms the daily notification on app start.
@@ -161,16 +194,28 @@ class NotificationService {
   // ---------------- permissions ----------------
 
   /// Returns true if the notification permission is (now) granted.
+  /// Never throws: a platform-channel hiccup is reported as «not granted».
   static Future<bool> ensurePermission() async {
-    final status = await Permission.notification.status;
-    if (status.isGranted) return true;
-    final result = await Permission.notification.request();
-    return result.isGranted;
+    try {
+      final status = await Permission.notification.status;
+      if (status.isGranted) return true;
+      final result = await Permission.notification.request();
+      return result.isGranted;
+    } catch (error) {
+      _lastPluginError = 'ensurePermission → $error';
+      debugPrint('NotificationService: permission check failed → $error');
+      return false;
+    }
   }
 
   /// Whether the OS-level notification permission is currently granted.
   static Future<bool> hasSystemPermission() async {
-    return (await Permission.notification.status).isGranted;
+    try {
+      return (await Permission.notification.status).isGranted;
+    } catch (error) {
+      _lastPluginError = 'hasSystemPermission → $error';
+      return false;
+    }
   }
 
   static AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
@@ -291,6 +336,38 @@ class NotificationService {
 
   // ---------------- plugin plumbing ----------------
 
+  /// Runs a plugin call that must never crash the UI.
+  ///
+  /// flutter_local_notifications keeps its queue of scheduled notifications as
+  /// JSON in its own SharedPreferences file and reads it back through Gson.
+  /// When that queue cannot be deserialized — the R8 «Missing type parameter.»
+  /// failure addressed by android/app/proguard-rules.pro, or a queue written by
+  /// an older/minified build — even `cancel()` throws a PlatformException from
+  /// deep inside `loadScheduledNotifications`. Cancelling an alarm that may not
+  /// exist is never worth a crash, so the failure is recorded and swallowed.
+  ///
+  /// Returns true when [body] completed without throwing.
+  static Future<bool> _guard(
+    String action,
+    Future<void> Function() body,
+  ) async {
+    try {
+      await body();
+      return true;
+    } on PlatformException catch (error) {
+      // The interesting part of a plugin failure is code + message; the Java
+      // stack trace in `details` is noise for our purposes.
+      _lastPluginError = '$action → ${error.code}: ${error.message}';
+      debugPrint('NotificationService: $action failed → '
+          '${error.code}: ${error.message}');
+      return false;
+    } catch (error) {
+      _lastPluginError = '$action → $error';
+      debugPrint('NotificationService: $action failed → $error');
+      return false;
+    }
+  }
+
   static Future<void> _ensurePlugin() async {
     if (_pluginReady) return;
 
@@ -316,9 +393,13 @@ class NotificationService {
     _pluginReady = true;
   }
 
-  static Future<void> _ensureReady() async {
-    _initTimezones();
-    await _ensurePlugin();
+  /// Initialises the timezone database and the plugin. Never throws: a failure
+  /// here (missing tz data, plugin channel error) must not take the UI down.
+  static Future<bool> _ensureReady() {
+    return _guard('ensureReady', () async {
+      _initTimezones();
+      await _ensurePlugin();
+    });
   }
 
   static NotificationDetails _details(_Message message) {
@@ -341,26 +422,41 @@ class NotificationService {
 
   // ---------------- scheduling engine ----------------
 
-  static Future<void> _scheduleDaily(TimeOfDay time, String type) async {
+  /// Arms the daily notification. Returns true when the plugin accepted the
+  /// schedule. Never throws — the settings UI keeps working either way.
+  static Future<bool> _scheduleDaily(TimeOfDay time, String type) async {
     await _ensureReady();
     await _cancelDaily();
 
-    final scheduled = _nextInstanceOf(time);
+    final tz.TZDateTime scheduled;
+    try {
+      scheduled = _nextInstanceOf(time);
+    } catch (error) {
+      // Only possible if timezone initialisation failed above.
+      _lastPluginError = 'nextInstanceOf → $error';
+      debugPrint('NotificationService: cannot resolve fire time → $error');
+      return false;
+    }
+
     final message = await _message(type);
     final exact = await canScheduleExact();
 
-    try {
-      await _zonedSchedule(scheduled, message, type, exact: exact);
-    } on PlatformException catch (_) {
-      // `exact_alarms_not_permitted` can still be thrown if the permission was
-      // revoked between the check and the call. Retry inexact so the user gets
-      // *something* rather than nothing.
-      if (exact) {
-        await _zonedSchedule(scheduled, message, type, exact: false);
-      } else {
-        rethrow;
-      }
+    if (await _guard('zonedSchedule(exact: $exact)',
+        () => _zonedSchedule(scheduled, message, type, exact: exact))) {
+      // A successful arm proves the plugin cache is healthy again, so an older
+      // swallowed error should no longer be reported by [scheduleStatus].
+      _lastPluginError = null;
+      return true;
     }
+
+    // `exact_alarms_not_permitted` can still be thrown if the permission was
+    // revoked between the check and the call, and a corrupted plugin cache can
+    // make the first attempt fail for unrelated reasons. Wipe the queue and
+    // retry inexact so the user gets *something* rather than nothing.
+    if (!exact) return false;
+    await _guard('cancelAll(before retry)', _plugin.cancelAll);
+    return _guard('zonedSchedule(exact: false)',
+        () => _zonedSchedule(scheduled, message, type, exact: false));
   }
 
   static Future<void> _zonedSchedule(
@@ -386,21 +482,44 @@ class NotificationService {
     );
   }
 
+  /// Cancels the daily notification.
+  ///
+  /// Every step is guarded: `cancel(id)` goes through the plugin's Gson-backed
+  /// cache, so on a build whose keep rules are missing (or with a queue left
+  /// behind by such a build) it throws «Missing type parameter.». Cancelling
+  /// something that is not scheduled must never surface to the UI, hence the
+  /// swallow-and-continue behaviour plus the `cancelAll()` fallback.
   static Future<void> _cancelDaily() async {
-    await _ensurePlugin();
-    await _plugin.cancel(_dailyNotificationId);
+    if (!await _guard('ensurePlugin(cancel)', _ensurePlugin)) return;
+
+    if (await _guard(
+      'cancel($_dailyNotificationId)',
+      () => _plugin.cancel(_dailyNotificationId),
+    )) {
+      return;
+    }
+
+    // Fallback: drop the whole queue. Hoda only ever schedules one repeating
+    // notification, so nothing of value is lost, and this also clears a cache
+    // that the per-id path could not read.
+    await _guard('cancelAll', _plugin.cancelAll);
   }
 
   /// Immediately show a test notification (used by the settings UI).
-  static Future<void> showTestNotification(String type) async {
+  /// Returns false when the plugin refused, so the UI can say so instead of
+  /// claiming success.
+  static Future<bool> showTestNotification(String type) async {
     await _ensureReady();
     final message = await _message(type);
-    await _plugin.show(
-      _testNotificationId,
-      '${message.title} (تست)',
-      message.body,
-      _details(message),
-      payload: type,
+    return _guard(
+      'show(test)',
+      () => _plugin.show(
+        _testNotificationId,
+        '${message.title} (تست)',
+        message.body,
+        _details(message),
+        payload: type,
+      ),
     );
   }
 
@@ -409,6 +528,10 @@ class NotificationService {
   /// Everything the settings screen needs to prove the schedule is armed:
   /// permission state, alarm precision, pending request count, resolved
   /// timezone and the next fire time (also pre-formatted in Persian).
+  ///
+  /// Fully defensive: reading the pending queue is the exact call that fails on
+  /// a minified build without the Gson keep rules, so it is isolated from the
+  /// permission checks and a failure only degrades the report.
   static Future<Map<String, dynamic>> scheduleStatus() async {
     final enabled = await isEnabled();
     final time = await getTime();
@@ -418,22 +541,38 @@ class NotificationService {
     var exactAllowed = false;
     var pendingCount = 0;
     var armed = false;
+    var queueReadable = true;
     String? error;
 
     try {
       await _ensureReady();
       notificationsAllowed = await hasSystemPermission();
       exactAllowed = await canScheduleExact();
-      final pending = await _plugin.pendingNotificationRequests();
-      pendingCount = pending.length;
-      armed = pending.any((r) => r.id == _dailyNotificationId);
     } catch (e) {
       error = e.toString();
     }
 
+    // Isolated on purpose: `pendingNotificationRequests()` deserializes the
+    // plugin's cache and can throw where nothing else does.
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      pendingCount = pending.length;
+      armed = pending.any((r) => r.id == _dailyNotificationId);
+    } catch (e) {
+      queueReadable = false;
+      _lastPluginError = 'pendingNotificationRequests → $e';
+      debugPrint('NotificationService: cannot read pending queue → $e');
+    }
+
+    // When the queue is unreadable we cannot prove the alarm is armed, but the
+    // pref says it should be — show the expected fire time rather than a scary
+    // «not registered», and let the summary explain the uncertainty.
+    final assumeArmed =
+        armed || (enabled && notificationsAllowed && !queueReadable);
+
     // Label the next fire on the device's own clock — that is what the user
     // compares against when checking whether the notification is armed.
-    final next = armed ? _nextLocalInstanceOf(time) : null;
+    final next = assumeArmed ? _nextLocalInstanceOf(time) : null;
     final nextLabel = next == null
         ? null
         : '${FaNum.relativeDay(next)} ${FaNum.time(next.hour, next.minute)}';
@@ -441,6 +580,7 @@ class NotificationService {
     return <String, dynamic>{
       'enabled': enabled,
       'armed': armed,
+      'queueReadable': queueReadable,
       'pendingCount': pendingCount,
       'notificationsAllowed': notificationsAllowed,
       'exactAllowed': exactAllowed,
@@ -453,18 +593,21 @@ class NotificationService {
       'summaryFa': _summaryFa(
         enabled: enabled,
         armed: armed,
+        queueReadable: queueReadable,
         notificationsAllowed: notificationsAllowed,
         exactAllowed: exactAllowed,
         nextLabel: nextLabel,
         error: error,
       ),
       if (error != null) 'error': error,
+      if (_lastPluginError != null) 'pluginError': _lastPluginError,
     };
   }
 
   static String _summaryFa({
     required bool enabled,
     required bool armed,
+    required bool queueReadable,
     required bool notificationsAllowed,
     required bool exactAllowed,
     required String? nextLabel,
@@ -479,12 +622,16 @@ class NotificationService {
     if (!notificationsAllowed) {
       return 'اجازه اعلان از سیستم گرفته نشده است.';
     }
-    if (!armed || nextLabel == null) {
-      return 'اعلان روشن است اما زمان‌بندی ثبت نشده؛ یک بار خاموش و روشنش کنید.';
-    }
     final precision = exactAllowed
         ? 'زمان‌بندی دقیق'
         : 'زمان‌بندی تقریبی — ممکن است با کمی تأخیر برسد';
+    if (!queueReadable) {
+      return 'اعلان روشن است؛ فهرست زمان‌بندی‌های سیستم خوانده نشد، '
+          'اما اعلان بعدی روی ${nextLabel ?? '—'} تنظیم است ($precision).';
+    }
+    if (!armed || nextLabel == null) {
+      return 'اعلان روشن است اما زمان‌بندی ثبت نشده؛ یک بار خاموش و روشنش کنید.';
+    }
     return 'اعلان بعدی: $nextLabel ($precision)';
   }
 

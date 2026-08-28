@@ -7,7 +7,7 @@ import '../utils/fa_num.dart';
 
 /// App version shown at the bottom of this screen. Keep in sync with the
 /// `version:` field in pubspec.yaml.
-const String kHodaVersionFa = '۰.۰.۷';
+const String kHodaVersionFa = '۰.۰.۸';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -268,9 +268,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _refreshStatus();
       return;
     }
-    await NotificationService.showTestNotification(_notifType);
+    final shown = await NotificationService.showTestNotification(_notifType);
     if (!mounted) return;
-    _snack('اعلان تست ارسال شد 🌿');
+    _snack(shown
+        ? 'اعلان تست ارسال شد 🌿'
+        : 'ارسال اعلان تست ممکن نشد. یک بار اعلان را خاموش و روشن کنید.');
   }
 
   // ---------------- schedule status card ----------------
@@ -300,6 +302,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final armed = status['armed'] == true;
+    // False when the plugin could not deserialize its own scheduled-notification
+    // cache; the schedule may still be armed, we just cannot prove it.
+    final queueReadable = status['queueReadable'] != false;
     final allowed = status['notificationsAllowed'] == true;
     final exact = status['exactAllowed'] == true;
     final summary = (status['summaryFa'] as String?) ?? '';
@@ -350,9 +355,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
             _statusRow(
               context,
-              icon: armed ? Icons.check_circle_outline : Icons.error_outline,
+              icon: armed
+                  ? Icons.check_circle_outline
+                  : queueReadable
+                      ? Icons.error_outline
+                      : Icons.help_outline,
               label: 'ثبت در سیستم',
-              value: armed ? 'ثبت شده' : 'ثبت نشده',
+              value: queueReadable
+                  ? (armed ? 'ثبت شده' : 'ثبت نشده')
+                  : 'نامشخص',
             ),
             _statusRow(
               context,
@@ -370,7 +381,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               context,
               icon: Icons.list_alt,
               label: 'اعلان‌های در نوبت',
-              value: pending is int ? FaNum.number(pending) : '—',
+              value: queueReadable && pending is int
+                  ? FaNum.number(pending)
+                  : '—',
             ),
             _statusRow(
               context,

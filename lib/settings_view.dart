@@ -11,6 +11,7 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   bool _notifEnabled = false;
+  bool _systemGranted = true;
   TimeOfDay _notifTime = const TimeOfDay(hour: 8, minute: 0);
   String _notifType = 'random';
   bool _loading = true;
@@ -25,21 +26,47 @@ class _SettingsViewState extends State<SettingsView> {
     final enabled = await NotificationService.isEnabled();
     final time = await NotificationService.getTime();
     final type = await NotificationService.getType();
+    final granted = await NotificationService.hasSystemPermission();
     if (!mounted) return;
     setState(() {
       _notifEnabled = enabled;
       _notifTime = time;
       _notifType = type;
+      _systemGranted = granted;
       _loading = false;
     });
   }
 
-  Future<void> _save() async {
+  Future<void> _toggleEnabled(bool val) async {
+    setState(() => _notifEnabled = val);
+
+    if (val) {
+      // Ask for the OS permission first; if denied, revert the switch.
+      final granted = await NotificationService.ensurePermission();
+      if (!granted) {
+        if (!mounted) return;
+        setState(() => _notifEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'اجازه اعلان داده نشد. از تنظیمات سیستم > برنامه‌ها > هُدا > اعلان‌ها می‌توانید فعالش کنید.'),
+          duration: Duration(seconds: 5),
+        ));
+        return;
+      }
+    }
+
     await NotificationService.saveSettings(
-      enabled: _notifEnabled,
+      enabled: val,
       time: _notifTime,
       type: _notifType,
     );
+    if (!mounted) return;
+    setState(() => _systemGranted = true);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(val
+          ? 'اعلان روزانه فعال شد — هر روز ساعت ${_notifTime.hour.toString().padLeft(2, '0')}:${_notifTime.minute.toString().padLeft(2, '0')}'
+          : 'اعلان‌های روزانه غیرفعال شد.'),
+    ));
   }
 
   @override
@@ -86,18 +113,12 @@ class _SettingsViewState extends State<SettingsView> {
         const SizedBox(height: 8),
         SwitchListTile(
           title: const Text('ارسال اعلان هوشمند'),
-          subtitle: const Text('دریافت آیه، حدیث یا وصیت شهید در طول روز'),
+          subtitle: Text(_notifEnabled
+              ? 'فعال — هر روز ساعت ${_notifTime.hour.toString().padLeft(2, '0')}:${_notifTime.minute.toString().padLeft(2, '0')}'
+              : 'دریافت آیه، حدیث یا وصیت شهید در طول روز'),
           secondary: const Icon(Icons.notifications_active, color: HodaColors.gold),
           value: _notifEnabled,
-          onChanged: (val) async {
-            setState(() => _notifEnabled = val);
-            await _save();
-            if (val && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('اعلان‌های روزانه فعال شد.')),
-              );
-            }
-          },
+          onChanged: _toggleEnabled,
         ),
         const SizedBox(height: 8),
 
@@ -113,7 +134,10 @@ class _SettingsViewState extends State<SettingsView> {
             );
             if (picked != null) {
               setState(() => _notifTime = picked);
-              await _save();
+              if (_notifEnabled) {
+                await NotificationService.saveSettings(
+                    enabled: true, time: picked, type: _notifType);
+              }
             }
           },
         ),
@@ -135,14 +159,65 @@ class _SettingsViewState extends State<SettingsView> {
             onChanged: (val) async {
               if (val != null) {
                 setState(() => _notifType = val);
-                await _save();
+                if (_notifEnabled) {
+                  await NotificationService.saveSettings(
+                      enabled: true, time: _notifTime, type: val);
+                }
               }
             },
           ),
         ),
+
+        // Test button — shows a notification right now
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final granted = await NotificationService.ensurePermission();
+            if (!granted) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('اجازه اعلان از سیستم داده نشد.')));
+              return;
+            }
+            await NotificationService.showTestNotification(_notifType);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('اعلان تست ارسال شد 🌿')));
+          },
+          icon: const Icon(Icons.notifications_none),
+          label: const Text('ارسال اعلان تست'),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: HodaColors.gold),
+            foregroundColor: Theme.of(context).colorScheme.tertiary,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+        ),
+
+        if (!_systemGranted) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                      'اجازه اعلان از سیستم گرفته نشده است. برای فعال‌سازی، از تنظیمات سیستم > برنامه‌ها > هُدا > اعلان‌ها، اجازه را بدهید.',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         const SizedBox(height: 32),
         const Center(
-          child: Text('نسخه ۰.۰.۵ - هُدا (پیشرفته)',
+          child: Text('نسخه ۰.۰.۶ - هُدا',
               style: TextStyle(color: Colors.grey, fontSize: 12)),
         ),
       ],

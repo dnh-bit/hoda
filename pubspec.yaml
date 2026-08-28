@@ -1,7 +1,7 @@
 name: hoda
 description: "هُدا - اپلیکیشن معنوی روزانه"
 publish_to: 'none'
-version: 0.0.5+1
+version: 0.0.6+1
 
 environment:
   sdk: ^3.5.4
@@ -15,6 +15,9 @@ dependencies:
   sqflite: ^2.3.0
   path: ^1.8.3
   cupertino_icons: ^1.0.8
+  flutter_local_notifications: ^17.2.2
+  permission_handler: ^11.3.1
+  timezone: ^0.9.4
 
 dev_dependencies:
   flutter_test:

@@ -298,8 +298,13 @@ class _HodaLogo extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight),
           ),
-          child:
-              const Icon(Icons.flight, size: 18, color: Colors.white),
+          child: Center(
+            child: Text('هُد',
+                style: TextStyle(
+                    fontFamily: 'Lalezar',
+                    fontSize: size * 0.42,
+                    color: Colors.white)),
+          ),
         ),
       ),
     );

@@ -1,28 +1,18 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'theme.dart';
-import 'home_screen.dart';
 
-String? _lastError;
-
-String _formatError(Object? error, StackTrace? stack) {
-  String msg = error?.toString() ?? 'Unknown error';
-  if (stack != null) {
-    final lines = stack.toString().split('\n');
-    if (lines.length > 6) {
-      msg += '\n\n' + lines.sublist(0, 6).join('\n');
-    }
-  }
-  return msg;
-}
+import 'app.dart';
+import 'services/notification_service.dart';
+import 'services/theme_controller.dart';
+import 'utils/app_error.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Surface build errors as text instead of a gray box.
+  // Surface build errors as readable text instead of a gray box.
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
       color: const Color(0xFFFFECEC),
@@ -30,12 +20,13 @@ Future<void> main() async {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Text(
-            _formatError(details.exception, details.stack),
+            AppError.format(details.exception, details.stack),
             textDirection: TextDirection.ltr,
             style: const TextStyle(
-                color: Color(0xFF8B0000),
-                fontSize: 13,
-                fontFamily: 'monospace'),
+              color: Color(0xFF8B0000),
+              fontSize: 13,
+              fontFamily: 'monospace',
+            ),
           ),
         ),
       ),
@@ -44,95 +35,23 @@ Future<void> main() async {
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    _lastError = _formatError(details.exception, details.stack);
+    AppError.record(details.exception, details.stack);
   };
   PlatformDispatcher.instance.onError = (error, stack) {
-    _lastError = _formatError(error, stack);
+    AppError.record(error, stack);
     return true;
   };
 
   await runZonedGuarded(() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedIsDark = prefs.getBool('hoda_theme_is_dark') ?? false;
-      ThemeController.mode.value =
-          savedIsDark ? ThemeMode.dark : ThemeMode.light;
-
-      ThemeController.mode.addListener(() async {
-        try {
-          final p = await SharedPreferences.getInstance();
-          await p.setBool('hoda_theme_is_dark',
-              ThemeController.mode.value == ThemeMode.dark);
-        } catch (_) {}
-      });
-    } catch (e) {
-      _lastError = _formatError(e, null);
-    }
-
+    await ThemeController.load();
     runApp(const HodaApp());
+
+    // Re-arm the daily notification after a reboot, an app update or a
+    // force-stop (AlarmManager drops alarms in all three cases). Deliberately
+    // not awaited so it never delays the first frame; it swallows its own
+    // errors internally.
+    unawaited(NotificationService.restoreSchedule());
   }, (error, stack) {
-    _lastError = _formatError(error, stack);
+    AppError.record(error, stack);
   });
-}
-
-class ErrorFallback extends StatelessWidget {
-  const ErrorFallback({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: const Color(0xFF1A1A1A),
-        appBar: AppBar(
-            title: const Text('هُدا - خطا'),
-            backgroundColor: Colors.red[900]),
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Text(
-              _lastError ?? 'خطای ناشناخته',
-              textDirection: TextDirection.ltr,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontFamily: 'monospace'),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class HodaApp extends StatelessWidget {
-  const HodaApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    if (_lastError != null) return const ErrorFallback();
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeController.mode,
-      builder: (context, mode, _) {
-        return MaterialApp(
-          title: 'هُدا',
-          debugShowCheckedModeBanner: false,
-          theme: HodaTheme.light,
-          darkTheme: HodaTheme.dark,
-          themeMode: mode,
-          locale: const Locale('fa', 'IR'),
-          supportedLocales: const [
-            Locale('fa', 'IR'),
-            Locale('en', 'US'),
-          ],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: const HomeScreen(),
-        );
-      },
-    );
-  }
 }

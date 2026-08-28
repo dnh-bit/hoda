@@ -1,7 +1,7 @@
 name: hoda
 description: "هُدا - اپلیکیشن معنوی روزانه"
 publish_to: 'none'
-version: 0.0.6+1
+version: 0.0.7+1
 
 environment:
   sdk: ^3.5.4
@@ -31,6 +31,8 @@ flutter:
     - assets/brand/hoda-logo.jpg
     - assets/brand/hoda-typography.jpg
     - assets/hoda.db
+    # Shipped so the SIL Open Font License text travels with the Amiri font.
+    - assets/fonts/Amiri-OFL.txt
   fonts:
     - family: Vazirmatn
       fonts:
@@ -40,3 +42,11 @@ flutter:
     - family: Lalezar
       fonts:
         - asset: assets/fonts/Lalezar-Regular.ttf
+    # Naskh face used for Arabic scripture (see lib/widgets/arabic_text.dart).
+    # Amiri (c) Khaled Hosny, licensed under the SIL Open Font License 1.1 —
+    # full text in assets/fonts/Amiri-OFL.txt.
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-Regular.ttf
+        - asset: assets/fonts/Amiri-Bold.ttf
+          weight: 700

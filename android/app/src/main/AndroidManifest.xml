@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Notifications (Android 13+) -->
+    <!-- Notifications (Android 13+ runtime permission) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Re-arm scheduled alarms after a reboot / app update -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Exact daily alarms. On Android 13 SCHEDULE_EXACT_ALARM is granted by
+         default but revocable; on Android 14+ the user must allow it in
+         Settings > Alarms & reminders. The app checks this at runtime and
+         falls back to inexact scheduling when it is denied.
+         USE_EXACT_ALARM is intentionally NOT declared: Google Play only
+         allows it for alarm/clock-style apps and it cannot be revoked. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:label="هُدا"
         android:name="${applicationName}"
@@ -28,6 +36,29 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- flutter_local_notifications: the plugin's own manifest only
+             declares permissions, so these receivers MUST be declared here.
+             Without ScheduledNotificationReceiver the AlarmManager alarm
+             fires into the void and a scheduled notification is never shown
+             (while an immediate `show()` still works). -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <!-- Delivers taps on notification action buttons back to the app. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false"/>
     </application>
     <queries>
         <intent>

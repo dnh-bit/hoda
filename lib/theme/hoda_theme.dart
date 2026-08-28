@@ -15,8 +15,16 @@ class HodaColors {
 class HodaTheme {
   HodaTheme._();
 
+  /// Persian (Farsi) UI font.
   static const String fontFamily = 'Vazirmatn';
+
+  /// Decorative font used for the app name only.
   static const String displayFontFamily = 'Lalezar';
+
+  /// Naskh font used for Arabic scripture (Quran, hadith, Nahj al-Balagha).
+  /// Vazirmatn is kept as a fallback so no glyph can ever render as tofu.
+  static const String arabicFontFamily = 'Amiri';
+  static const List<String> arabicFontFallback = <String>[fontFamily];
 
   static TextTheme _textTheme(Color color) {
     return TextTheme(
@@ -129,16 +137,5 @@ class HodaTheme {
       letterSpacing: 1.0,
       color: Theme.of(context).appBarTheme.foregroundColor,
     );
-  }
-}
-
-class ThemeController {
-  ThemeController._();
-  static final ValueNotifier<ThemeMode> mode =
-      ValueNotifier<ThemeMode>(ThemeMode.light);
-
-  static void toggle() {
-    mode.value =
-        mode.value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
   }
 }

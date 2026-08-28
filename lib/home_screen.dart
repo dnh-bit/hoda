@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'models.dart';
 import 'database_helper.dart';
+import 'settings_view.dart';
+import 'favorites_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -94,16 +96,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _openSettings() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => const _SettingsSheet(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -177,7 +169,6 @@ class _HomeScreenState extends State<HomeScreen> {
         source: m != null ? _s(m['name']) : '');
 
     final pages = <Widget>[
-      // Index 0 = خانه (Home) — no longer the آیه page
       _HomePage(
         verse: verseCard,
         hadith: hadithCard,
@@ -211,6 +202,8 @@ class _HomeScreenState extends State<HomeScreen> {
           heading: 'حکمت‌های نهج‌البلاغه',
           emptyText: 'حکمتی یافت نشد',
           icon: Icons.auto_stories),
+      const FavoritesView(),
+      const SettingsView(),
       _SalawatPage(
         count: _salawatCount,
         onIncrement: () => setState(() => _salawatCount++),
@@ -232,9 +225,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'نشان‌شده‌ها',
+            icon: const Icon(Icons.bookmark_outline),
+            onPressed: () => setState(() => _currentIndex = 5),
+          ),
+          IconButton(
             tooltip: 'تنظیمات',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: _openSettings,
+            onPressed: () => setState(() => _currentIndex = 6),
           ),
         ],
       ),
@@ -243,8 +241,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: pages[_currentIndex],
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
+        currentIndex: _currentIndex > 4 ? 0 : _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
@@ -266,10 +265,6 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.auto_stories_outlined),
               activeIcon: Icon(Icons.auto_stories),
               label: 'حکمت'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.favorite_outline),
-              activeIcon: Icon(Icons.favorite),
-              label: 'صلوات'),
         ],
       ),
     );
@@ -311,7 +306,6 @@ class _HodaLogo extends StatelessWidget {
   }
 }
 
-/// The new, welcoming "خانه" (Home) page — the real landing tab.
 class _HomePage extends StatelessWidget {
   final DailyContent verse;
   final DailyContent hadith;
@@ -341,7 +335,6 @@ class _HomePage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       children: [
-        // Greeting hero
         Container(
           padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
           decoration: BoxDecoration(
@@ -370,7 +363,7 @@ class _HomePage extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   )),
               const SizedBox(height: 6),
-              Text('همراه معنوی روزانه شما',
+              Text('همراه معنوی روزانه شما • نسخه پیشرفته',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.white.withOpacity(0.9),
@@ -386,10 +379,10 @@ class _HomePage extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.touch_app,
-                        color: Colors.white70, size: 18),
+                    const Icon(Icons.wb_sunny,
+                        color: Colors.amberAccent, size: 18),
                     const SizedBox(width: 8),
-                    Text('برای نمایش امروز، لمس کنید',
+                    Text('ذکر روز و هدایت معنوی',
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: Colors.white)),
                   ],
@@ -399,8 +392,6 @@ class _HomePage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 22),
-
-        // "Content of the day" section header
         _SectionHeader(
           icon: Icons.wb_sunny_outlined,
           title: 'محتوای امروز',
@@ -430,10 +421,8 @@ class _HomePage extends StatelessWidget {
             icon: Icons.volunteer_activism,
             onTap: onBrowseMartyrs),
         const SizedBox(height: 20),
-
-        // Quick actions grid
         _SectionHeader(
-            icon: Icons.auto_awesome_outlined, title: 'کاوش کنید'),
+            icon: Icons.auto_awesome_outlined, title: 'کاوش سریع'),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
@@ -446,21 +435,21 @@ class _HomePage extends StatelessWidget {
             _QuickTile(
               icon: Icons.menu_book,
               title: 'آیات',
-              subtitle: '${verseCountHint()} آیه',
+              subtitle: 'آیات نورانی قرآن',
               color: HodaColors.gold,
               onTap: onBrowseVerses,
             ),
             _QuickTile(
               icon: Icons.format_quote,
               title: 'احادیث',
-              subtitle: '${hadithCountHint()} حدیث',
+              subtitle: 'سخنان اهل بیت (ع)',
               color: HodaColors.turquoise,
               onTap: onBrowseHadiths,
             ),
             _QuickTile(
               icon: Icons.volunteer_activism,
               title: 'وصایا',
-              subtitle: 'وصایای شهدا',
+              subtitle: 'پیام شهدا',
               color: HodaColors.gold,
               onTap: onBrowseMartyrs,
             ),
@@ -474,8 +463,6 @@ class _HomePage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-
-        // Salawat quick shortcut
         InkWell(
           onTap: onSalawatTap,
           borderRadius: BorderRadius.circular(20),
@@ -495,11 +482,11 @@ class _HomePage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ذکر صلوات',
+                      Text('ذکر صلوات شمار',
                           style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold)),
                       const SizedBox(height: 2),
-                      Text('تسبیح برای آرامش قلب',
+                      Text('برای افزایش صلوات لمس کنید',
                           style: theme.textTheme.bodySmall),
                     ],
                   ),
@@ -524,9 +511,6 @@ class _HomePage extends StatelessWidget {
     ];
     return week[DateTime.now().weekday % 7];
   }
-
-  static int verseCountHint() => 130;
-  static int hadithCountHint() => 40;
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -739,7 +723,7 @@ class _SalawatPage extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text('ذکر صلوات', style: theme.textTheme.titleMedium),
+            Text('ذکر صلوات شمار', style: theme.textTheme.titleMedium),
             const SizedBox(height: 40),
             GestureDetector(
               onTap: onIncrement,
@@ -786,49 +770,6 @@ class _SalawatPage extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsSheet extends StatelessWidget {
-  const _SettingsSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('تنظیمات',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<ThemeMode>(
-              valueListenable: ThemeController.mode,
-              builder: (context, mode, _) {
-                final isDark = mode == ThemeMode.dark;
-                return SwitchListTile(
-                  title: const Text('حالت شب'),
-                  subtitle: Text(isDark ? 'فعال' : 'غیرفعال'),
-                  secondary: Icon(
-                      isDark ? Icons.dark_mode : Icons.light_mode,
-                      color: Theme.of(context).colorScheme.tertiary),
-                  value: isDark,
-                  onChanged: (_) => ThemeController.toggle(),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            const Text('نسخه ۰.۰.۴',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
       ),

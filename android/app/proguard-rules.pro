@@ -68,3 +68,9 @@
 # --- Flutter engine / embedding --------------------------------------------
 -keep class io.flutter.** { *; }
 -dontwarn io.flutter.embedding.**
+
+# --- R8 missing-class don't-warns ------------------------------------------
+# FlutterPlayStoreSplitApplication references Play Core classes that are not on
+# the compile classpath (split-APlay delivery is not used by this app). Without
+# this dontwarn R8 aborts with "Missing class ... SplitCompatApplication".
+-dontwarn com.google.android.play.core.**

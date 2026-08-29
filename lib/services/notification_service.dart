@@ -1285,6 +1285,11 @@ class NotificationService {
   ///
   /// For `random` the pair's key is the type that was actually chosen, which is
   /// what ends up in the payload and therefore drives tab routing.
+  ///
+  /// `random` picks a *different type* every day (rotating through the type
+  /// list by day-of-year + variant), so the daily notification doesn't always
+  /// show the same category. The concrete item within the type still rotates
+  /// daily via [DatabaseHelper.getDailyContent]'s day-of-year index.
   static MapEntry<String, DailyContent>? _select(
     HodaContent content,
     String type, {

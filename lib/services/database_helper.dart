@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Thin data-access layer over the bundled read-only content database.
@@ -12,6 +13,14 @@ class DatabaseHelper {
   static const String dbName = 'hoda.db';
   static const String assetPath = 'assets/hoda.db';
 
+  /// Content/schema stamp of the bundled database. Bump this whenever
+  /// `assets/hoda.db` changes structurally (new tables/columns) or wholesale
+  /// (v0.1.0 content refresh): existing installs then re-copy the bundled file
+  /// over their stale copy. Pure row additions don't need a bump.
+  static const int dbContentVersion = 2;
+
+  static const String _stampKey = 'hoda_db_content_version';
+
   static Future<Database> get database async {
     return _database ??= await _initDatabase();
   }
@@ -21,6 +30,7 @@ class DatabaseHelper {
 
     try {
       await _copyAssetIfMissing(path);
+      await _reCopyIfStale(path);
       final db = await openDatabase(path, version: 1);
       if (await _verseCount(db) > 0) return db;
       // Present but empty/corrupt -> fall through and re-copy.
@@ -30,7 +40,32 @@ class DatabaseHelper {
     }
 
     await _copyAsset(path, overwrite: true);
+    await _writeStamp();
     return openDatabase(path, version: 1);
+  }
+
+  /// Re-copies the bundled database when the install's stamp is older than
+  /// [dbContentVersion]. Runs before openDatabase so the new schema is what
+  /// gets opened. Best-effort: any failure keeps the existing file.
+  static Future<void> _reCopyIfStale(String path) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getInt(_stampKey) ?? 1;
+      if (current >= dbContentVersion) return;
+      await _copyAsset(path, overwrite: true);
+      await prefs.setInt(_stampKey, dbContentVersion);
+    } catch (_) {
+      // Stale-copy detection is an optimisation; never block start-up.
+    }
+  }
+
+  static Future<void> _writeStamp() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_stampKey, dbContentVersion);
+    } catch (_) {
+      // Best-effort.
+    }
   }
 
   static Future<int> _verseCount(Database db) async {

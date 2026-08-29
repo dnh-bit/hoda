@@ -11,6 +11,11 @@ class DailyContent {
   /// Optional extra note (e.g. place/year for a martyr, translator for Nahj).
   final String note;
 
+  /// Short excerpt made for notification bodies. Populated only for martyr
+  /// wills (column `notif_excerpt`); when present the notification system
+  /// prefers it over the full [persian] text.
+  final String? notifPersian;
+
   /// Stable identity of the database row this item came from, formatted as
   /// `<table>:<id>` (`verses:17`, `martyrs:3`, …). Populated by
   /// `ContentRepository`'s row mappers.
@@ -26,6 +31,7 @@ class DailyContent {
     required this.persian,
     this.source = '',
     this.note = '',
+    this.notifPersian,
     this.uid,
   });
 

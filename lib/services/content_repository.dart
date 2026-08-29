@@ -157,11 +157,15 @@ class ContentRepository {
     final year = _s(row['year']);
     final place = _s(row['place']);
     final meta = [place, year].where((e) => e.isNotEmpty).join(' • ');
+    // `notif_excerpt` carries the short «فرازی از وصیت شهید» written for
+    // notification bodies; null/empty falls back to the full will text.
+    final notif = _s(row['notif_excerpt']);
     return DailyContent(
       title: title ?? (name.isEmpty ? 'وصیت شهید' : name),
       persian: _s(row['excerpt']),
       source: name,
       note: meta,
+      notifPersian: notif.isEmpty ? null : notif,
       uid: _uid('martyrs', row, '$name|${_s(row['excerpt'])}'),
     );
   }

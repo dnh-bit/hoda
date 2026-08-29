@@ -1224,8 +1224,14 @@ class NotificationService {
       if (picked == null) return _fallbackMessage;
 
       final item = picked.value;
+      // Notification texts prefer the dedicated short excerpt (martyr wills
+      // carry one in `notif_excerpt`); the full text stays behind the tap.
+      final bodyText =
+          (item.notifPersian?.trim().isNotEmpty ?? false)
+              ? item.notifPersian!.trim()
+              : item.persian.trim();
       final arabic = item.hasArabic ? _clip(item.arabic.trim(), 200) : '';
-      final persian = item.hasPersian ? _clip(item.persian.trim(), 240) : '';
+      final persian = bodyText.isNotEmpty ? _clip(bodyText, 240) : '';
       if (arabic.isEmpty && persian.isEmpty) return _fallbackMessage;
       // Third line of the card: «بقره ۲۵۵», «الکافی», the martyr's name…
       final source = item.hasSource ? _clip(item.source.trim(), 90) : '';

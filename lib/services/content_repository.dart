@@ -55,6 +55,33 @@ class HodaContent {
         if (dailyMartyr != null) dailyMartyr!,
         if (dailyNahj != null) dailyNahj!,
       ];
+
+  /// The item whose [DailyContent.uid] equals [uid], or null when this snapshot
+  /// does not contain it.
+  ///
+  /// Used by the shell to open the exact card a notification was showing. The
+  /// browsing lists are searched first on purpose: their items are the ones a
+  /// tap on a card would open (same row, but titled «بقره ۲۵۵» instead of
+  /// «آیه روز»). The daily picks are the fallback, which is what makes this
+  /// work for `dailyZekr` too — it is not part of any list.
+  DailyContent? findByUid(String? uid) {
+    if (uid == null || uid.isEmpty) return null;
+    for (final list in <List<DailyContent>>[verses, hadiths, martyrs, nahj]) {
+      for (final item in list) {
+        if (item.uid == uid) return item;
+      }
+    }
+    for (final item in <DailyContent?>[
+      dailyVerse,
+      dailyHadith,
+      dailyMartyr,
+      dailyNahj,
+      dailyZekr,
+    ]) {
+      if (item != null && item.uid == uid) return item;
+    }
+    return null;
+  }
 }
 
 /// Maps raw database rows onto [DailyContent] models.
@@ -65,6 +92,26 @@ class ContentRepository {
 
   static String _s(Object? value) => value?.toString().trim() ?? '';
 
+  /// Stable `<table>:<id>` identity for a row, or null when it cannot be
+  /// derived.
+  ///
+  /// Every content table in `assets/hoda.db` (`verses`, `hadiths`,
+  /// `nahj_wisdoms`, `martyrs`, `zekr`) has an `INTEGER PRIMARY KEY id`, and
+  /// [DatabaseHelper] selects whole rows (`db.query(table)`), so `row['id']` is
+  /// always present in practice — no `rowid AS id` alias is needed.
+  ///
+  /// The hash branch is a last resort for a future/rebuilt database whose table
+  /// has no `id`: it keeps taps working within one app version, but it is *not*
+  /// guaranteed stable across Dart SDK upgrades, so it must never become the
+  /// normal path.
+  static String? _uid(String table, Map<String, dynamic> row, String seed) {
+    final id = _s(row['id']);
+    if (id.isNotEmpty) return '$table:$id';
+    final clean = seed.trim();
+    if (clean.isEmpty) return null;
+    return '$table:h${clean.hashCode.toRadixString(16)}';
+  }
+
   static DailyContent verseFrom(Map<String, dynamic> row, {String? title}) {
     final ref = _s(row['ref']).isEmpty ? _s(row['source']) : _s(row['ref']);
     return DailyContent(
@@ -72,6 +119,7 @@ class ContentRepository {
       arabic: _s(row['arabic']),
       persian: _s(row['farsi']),
       source: ref.isEmpty ? 'قرآن کریم' : ref,
+      uid: _uid('verses', row, '$ref|${_s(row['arabic'])}'),
     );
   }
 
@@ -81,6 +129,11 @@ class ContentRepository {
       arabic: _s(row['arabic']),
       persian: _s(row['farsi']),
       source: _s(row['source']),
+      uid: _uid(
+        'hadiths',
+        row,
+        '${_s(row['source'])}|${_s(row['arabic'])}',
+      ),
     );
   }
 
@@ -95,6 +148,7 @@ class ContentRepository {
       note: _s(row['translator']).isEmpty
           ? ''
           : 'ترجمه: ${_s(row['translator'])}',
+      uid: _uid('nahj_wisdoms', row, '$number|${_s(row['arabic'])}'),
     );
   }
 
@@ -108,6 +162,7 @@ class ContentRepository {
       persian: _s(row['excerpt']),
       source: name,
       note: meta,
+      uid: _uid('martyrs', row, '$name|${_s(row['excerpt'])}'),
     );
   }
 
@@ -126,6 +181,7 @@ class ContentRepository {
       persian: _s(row['zekr_farsi']),
       source: 'اعمال روز',
       note: note,
+      uid: _uid('zekr', row, '$day|${_s(row['zekr_arabic'])}'),
     );
   }
 

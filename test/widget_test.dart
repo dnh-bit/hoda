@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hoda/app.dart';
+import 'package:hoda/models/daily_content.dart';
+import 'package:hoda/services/content_repository.dart';
+import 'package:hoda/services/notification_service.dart';
 import 'package:hoda/services/salawat_store.dart';
 import 'package:hoda/utils/fa_num.dart';
 
@@ -35,6 +38,57 @@ void main() {
           const SalawatCounts(today: 1, total: 9));
       expect(const SalawatCounts(today: 1, total: 9),
           isNot(const SalawatCounts(today: 1, total: 10)));
+    });
+  });
+
+  group('notification payload', () {
+    test('three-segment payload yields type and uid', () {
+      const payload = 'random|verse|verses:12';
+      expect(NotificationService.typeFromPayload(payload), 'verse');
+      expect(NotificationService.uidFromPayload(payload), 'verses:12');
+    });
+
+    test('legacy two-segment payload still routes, without a uid', () {
+      const payload = 'random|nahj';
+      expect(NotificationService.typeFromPayload(payload), 'nahj');
+      expect(NotificationService.uidFromPayload(payload), isNull);
+    });
+
+    test('empty payload routes nowhere', () {
+      expect(NotificationService.typeFromPayload(null), isNull);
+      expect(NotificationService.typeFromPayload(''), isNull);
+      expect(NotificationService.uidFromPayload(null), isNull);
+    });
+  });
+
+  group('HodaContent.findByUid', () {
+    const verse = DailyContent(
+      title: 'بقره ۲۵۵',
+      persian: 'ترجمه',
+      uid: 'verses:1',
+    );
+    const daily = DailyContent(
+      title: 'حکمت روز',
+      persian: 'متن',
+      uid: 'nahj_wisdoms:7',
+    );
+    const content = HodaContent(
+      dailyNahj: daily,
+      verses: <DailyContent>[verse],
+    );
+
+    test('finds a list item by uid', () {
+      expect(content.findByUid('verses:1'), same(verse));
+    });
+
+    test('falls back to the daily picks', () {
+      expect(content.findByUid('nahj_wisdoms:7'), same(daily));
+    });
+
+    test('unknown or missing uid resolves to null', () {
+      expect(content.findByUid('verses:999'), isNull);
+      expect(content.findByUid(null), isNull);
+      expect(content.findByUid(''), isNull);
     });
   });
 }

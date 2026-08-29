@@ -11,12 +11,22 @@ class DailyContent {
   /// Optional extra note (e.g. place/year for a martyr, translator for Nahj).
   final String note;
 
+  /// Stable identity of the database row this item came from, formatted as
+  /// `<table>:<id>` (`verses:17`, `martyrs:3`, …). Populated by
+  /// `ContentRepository`'s row mappers.
+  ///
+  /// It travels in the notification payload so a tap can reopen this exact card
+  /// (see `NotificationService.onNotificationOpen`). Null for content that has
+  /// no row behind it — placeholders and hand-built items.
+  final String? uid;
+
   const DailyContent({
     required this.title,
     this.arabic = '',
     required this.persian,
     this.source = '',
     this.note = '',
+    this.uid,
   });
 
   bool get hasArabic => arabic.trim().isNotEmpty;

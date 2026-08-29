@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../models/daily_content.dart';
 import '../services/content_repository.dart';
 import '../services/notification_service.dart';
 import '../services/salawat_store.dart';
 import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
 import '../widgets/hoda_logo.dart';
+import 'content_detail_screen.dart';
 import 'content_list_view.dart';
 import 'favorites_screen.dart';
 import 'home_tab.dart';
@@ -21,9 +25,17 @@ import 'settings_screen.dart';
 /// the very same counter widget. Favorites and settings are pushed as routes so
 /// the bottom bar always reflects the visible tab.
 ///
-/// It is also the target of notification tap routing: it listens to
-/// [NotificationService.onNotificationTap] and switches to the tab that matches
-/// the tapped notification's content type.
+/// It is also the target of notification tap routing, in two steps:
+/// 1. [NotificationService.onNotificationTap] carries the content *type* and
+///    switches to the matching tab (see [_applyPayloadType]).
+/// 2. [NotificationService.onNotificationOpen] carries the content *uid* and
+///    pushes [ContentDetailScreen] for that exact item shortly after, so the
+///    user lands on the very آیه the notification was showing — the same screen
+///    a tap on its card would open.
+///
+/// Both work on a cold start too: the launch payload is replayed after the
+/// first frame, and a uid that arrives while the database is still loading is
+/// parked in [_pendingUid] and honoured once [_load] finishes.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -48,33 +60,54 @@ class _HomeScreenState extends State<HomeScreen> {
     'nahj': tabNahj,
   };
 
+  /// Waiting period between the tab switch and the detail push, so the
+  /// [IndexedStack] swap and the bottom-bar animation settle first and the
+  /// pushed route animates over a finished frame.
+  static const Duration _openDelay = Duration(milliseconds: 350);
+
   int _currentIndex = tabHome;
   HodaContent _content = const HodaContent();
   bool _loading = true;
   String? _error;
+
+  /// A uid that arrived before the database finished loading (the cold-start
+  /// case: the launch payload is replayed after the first frame, while [_load]
+  /// is still running). Honoured at the end of [_load].
+  String? _pendingUid;
+
+  /// Pending detail push, cancelled on dispose and superseded by a newer tap.
+  Timer? _openTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
 
-    // A cold start can emit the launch payload before this listener is
-    // attached, so the current value is applied once up-front.
+    // A cold start can emit the launch payload before these listeners are
+    // attached, so the current values are applied once up-front.
     NotificationService.onNotificationTap.addListener(_onNotificationTap);
+    NotificationService.onNotificationOpen.addListener(_onNotificationOpen);
     _applyPayloadType(
       NotificationService.onNotificationTap.value,
       viaSetState: false,
     );
+    _requestOpen(NotificationService.onNotificationOpen.value);
   }
 
   @override
   void dispose() {
     NotificationService.onNotificationTap.removeListener(_onNotificationTap);
+    NotificationService.onNotificationOpen.removeListener(_onNotificationOpen);
+    _openTimer?.cancel();
     super.dispose();
   }
 
   void _onNotificationTap() {
     _applyPayloadType(NotificationService.onNotificationTap.value);
+  }
+
+  void _onNotificationOpen() {
+    _requestOpen(NotificationService.onNotificationOpen.value);
   }
 
   /// Switches to the tab matching a notification payload type.
@@ -90,6 +123,37 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!mounted || _currentIndex == target) return;
     setState(() => _currentIndex = target);
+  }
+
+  /// Entry point for [NotificationService.onNotificationOpen]: remembers the
+  /// uid while the content is still loading, otherwise arms the delayed push.
+  ///
+  /// The tab has already been switched by [_applyPayloadType] at this point —
+  /// the service emits the type first.
+  void _requestOpen(String? uid) {
+    if (uid == null || uid.isEmpty) return;
+    if (_loading) {
+      _pendingUid = uid;
+      return;
+    }
+    _scheduleOpen(uid);
+  }
+
+  /// Pushes [ContentDetailScreen] for [uid] after [_openDelay].
+  ///
+  /// An unknown uid (content removed, or a payload from another database
+  /// revision) is silently ignored: the user simply stays on the tab that
+  /// [_applyPayloadType] selected.
+  void _scheduleOpen(String uid) {
+    _openTimer?.cancel();
+    _openTimer = Timer(_openDelay, () {
+      if (!mounted) return;
+      final DailyContent? item = _content.findByUid(uid);
+      if (item == null) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ContentDetailScreen(content: item)),
+      );
+    });
   }
 
   Future<void> _load() async {
@@ -112,6 +176,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = error;
       _loading = false;
     });
+
+    // Cold start: the notification uid arrived while this load was running.
+    final pending = _pendingUid;
+    _pendingUid = null;
+    if (pending != null && error == null) _scheduleOpen(pending);
   }
 
   void _openSalawat() {

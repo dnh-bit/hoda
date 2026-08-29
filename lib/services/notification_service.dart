@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data' show Int64List;
 import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/material.dart';
@@ -35,25 +36,41 @@ void hodaNotificationBackgroundTap(NotificationResponse response) {
 
 /// A notification payload ready to be handed to the plugin.
 ///
-/// [body] is the plain-text version used for the collapsed line (and iOS),
-/// [htmlBody] / [htmlTitle] are the HTML-formatted versions handed to
-/// [BigTextStyleInformation] with the `htmlFormat*` flags on. [resolvedType] is
-/// the concrete content type that ended up in the notification — it is what the
-/// payload carries, so a tap can open the matching tab even for a `random`
-/// schedule.
+/// - [title] is the *raw* Persian title without bidi wrappers, so callers can
+///   still append a suffix («(تست)») before wrapping it.
+/// - [displayTitle] is [title] wrapped in the RTL embedding pair; it is what
+///   the plugin receives as the collapsed title (and what iOS shows).
+/// - [body] is the plain-text version used for the collapsed line (and iOS),
+///   with every line wrapped individually (a `\n` ends a bidi paragraph, so one
+///   wrapper around the whole block would not survive the line break).
+/// - [htmlBody] / [htmlTitle] are the HTML-formatted versions handed to
+///   [BigTextStyleInformation] with the `htmlFormat*` flags on.
+/// - [ticker] is the short Persian line Android speaks/shows as the heads-up
+///   ticker; wrapped as well so it does not flip to LTR.
+/// - [resolvedType] is the concrete content type that ended up in the
+///   notification — it is what the payload carries, so a tap can open the
+///   matching tab even for a `random` schedule.
+/// - [uid] identifies the concrete content row (`<table>:<id>`), so a tap can
+///   open that exact card. Null when the item could not be identified.
 class _Message {
   final String title;
+  final String displayTitle;
   final String body;
   final String htmlTitle;
   final String htmlBody;
+  final String ticker;
   final String resolvedType;
+  final String? uid;
 
   const _Message({
     required this.title,
+    required this.displayTitle,
     required this.body,
     required this.htmlTitle,
     required this.htmlBody,
+    required this.ticker,
     required this.resolvedType,
+    this.uid,
   });
 }
 
@@ -131,12 +148,57 @@ class NotificationService {
   /// Shown by Android under the expanded notification.
   static const String _summaryTextFa = 'هُدا • محتوای معنوی امروز';
 
+  /// App name in the notification header. Plain text (Android does not parse
+  /// HTML in `subText`), so the bidi pair is applied literally here.
+  static const String _subTextFa = '$_rtlOpen$_appNameFa$_rtlClose';
+
+  /// The app name, reused by titles and [_subTextFa].
+  static const String _appNameFa = 'هُدا';
+
+  /// Gentle two-pulse vibration: wait, buzz, pause, buzz (milliseconds).
+  /// `Int64List` is what the plugin expects for `vibrationPattern`.
+  static final Int64List _vibrationPattern =
+      Int64List.fromList(<int>[0, 220, 160, 220]);
+
   /// Groups Hoda notifications so several of them stack instead of flooding
   /// the shade.
   static const String _groupKey = 'ir.hoda.daily';
 
   /// Right-to-left embedding + pop, so Android lays the text out RTL even when
   /// the device locale is left-to-right.
+  ///
+  /// ## How Hoda guarantees RTL notifications — do not strip this
+  ///
+  /// A notification is rendered by the *system* UI (SystemUI), which lays text
+  /// out according to the **device** locale, not the app's. On a phone set to
+  /// English, Persian/Arabic text is therefore treated as a neutral run inside
+  /// an LTR paragraph: the line starts on the left, and trailing punctuation
+  /// («…», «؟», «•», parentheses, digits) jumps to the wrong side.
+  ///
+  /// The fix is the Unicode Bidirectional Algorithm's *embedding* pair:
+  /// `U+202B RIGHT-TO-LEFT EMBEDDING` … `U+202C POP DIRECTIONAL FORMATTING`
+  /// ([_rtlOpen] / [_rtlClose], applied by [_rtl]). Everything between them is
+  /// laid out RTL regardless of the surrounding paragraph direction.
+  ///
+  /// Three rules follow from the algorithm and are implemented in [_message]:
+  /// 1. **Every segment gets its own pair.** A bidi embedding does not survive
+  ///    a paragraph break, so a `\n`-separated plain body must wrap each line
+  ///    separately; in the HTML body each `<br>`-separated segment is wrapped
+  ///    too.
+  /// 2. **The control characters sit inside the HTML tags**
+  ///    (`<b>\u202B…\u202C</b>`), not around them. `Html.fromHtml` only parses
+  ///    markup — the controls are ordinary characters to it, so keeping them
+  ///    inside the tag makes them part of the styled span itself and they
+  ///    cannot be lost if the markup is stripped by an OEM ROM.
+  /// 3. **All four visible slots are wrapped**: title / contentTitle, each body
+  ///    line, [_summaryTextFa] and the heads-up [ticker]. Anything left
+  ///    unwrapped is the one line the user will see flipped.
+  ///
+  /// What the user sees: a turquoise-accented card titled «هُدا 🌿 — عنوان»,
+  /// with the bold Arabic passage on the first line, its Persian translation
+  /// under it, the source in italics, «هُدا • محتوای معنوی امروز» as the
+  /// expanded summary — all right-aligned and reading right-to-left even on an
+  /// English phone.
   static const String _rtlOpen = '\u202B';
   static const String _rtlClose = '\u202C';
 
@@ -173,19 +235,45 @@ class NotificationService {
   static final ValueNotifier<String?> onNotificationTap =
       ValueNotifier<String?>(null);
 
-  /// Payload wire format: `requestedType|resolvedType`.
+  /// Emits the [DailyContent.uid] of the item the tapped notification was
+  /// showing (`verses:17`, `martyrs:3`, …), or nothing when the payload carries
+  /// no identity (a notification armed by an older version, or a fallback
+  /// message). The shell uses it to push the exact content card after it
+  /// switched tab.
+  ///
+  /// Reset to null before every emission, exactly like [onNotificationTap], so
+  /// tapping the same notification twice notifies listeners twice.
+  static final ValueNotifier<String?> onNotificationOpen =
+      ValueNotifier<String?>(null);
+
+  /// Payload wire format: `requestedType|resolvedType[|uid]`.
   ///
   /// The requested type is kept for diagnostics (a `random` schedule stays
-  /// recognisable) while the resolved type is what drives tab routing.
-  static String _payloadFor(String requestedType, String resolvedType) =>
-      '$requestedType|$resolvedType';
+  /// recognisable), the resolved type drives tab routing and the optional third
+  /// segment identifies the concrete row so the tap can open that very card.
+  ///
+  /// The third segment is *optional on purpose*: notifications armed by 0.0.9
+  /// (two segments) are still in the plugin's queue after an update and must
+  /// keep routing to their tab — see [typeFromPayload] / [uidFromPayload].
+  static String _payloadFor(
+    String requestedType,
+    String resolvedType, [
+    String? uid,
+  ]) {
+    final base = '$requestedType|$resolvedType';
+    if (uid == null || uid.trim().isEmpty) return base;
+    // `|` is the field separator, so it can never appear inside a uid.
+    return '$base|${uid.trim().replaceAll('|', '/')}';
+  }
 
   /// Content type a payload should navigate to, or null when there is nothing
   /// to route (empty payload).
   static String? typeFromPayload(String? payload) {
     if (payload == null || payload.trim().isEmpty) return null;
     final parts = payload.split('|');
-    // Prefer the resolved type (last segment); fall back to the requested one.
+    // Prefer the resolved type (last type-looking segment); fall back to the
+    // requested one. Scanning instead of indexing keeps both the legacy
+    // two-segment format and the new three-segment one working.
     for (final part in parts.reversed) {
       final candidate = part.trim();
       if (candidate.isEmpty) continue;
@@ -195,11 +283,26 @@ class NotificationService {
     return 'random';
   }
 
+  /// Content uid carried by a payload, or null for the legacy two-segment
+  /// format (and for fallback messages, which have no concrete row).
+  static String? uidFromPayload(String? payload) {
+    if (payload == null || payload.trim().isEmpty) return null;
+    final parts = payload.split('|');
+    if (parts.length < 3) return null;
+    final uid = parts[2].trim();
+    return uid.isEmpty ? null : uid;
+  }
+
   static void _emitTap(String? payload) {
     final type = typeFromPayload(payload);
     if (type == null) return;
     onNotificationTap.value = null;
     onNotificationTap.value = type;
+    // Emitted *after* the type so the shell has already switched tab by the
+    // time it starts resolving the uid.
+    final uid = uidFromPayload(payload);
+    onNotificationOpen.value = null;
+    if (uid != null) onNotificationOpen.value = uid;
   }
 
   /// Foreground / warm-start tap handler.
@@ -717,19 +820,38 @@ class NotificationService {
 
   // ---------------- styling ----------------
 
-  /// Branded, RTL, HTML-formatted notification details.
+  /// The ONE branded, RTL, HTML-formatted notification style builder.
+  ///
+  /// Every path that shows something — [_zonedSchedule] (the armed daily
+  /// schedules), [showTestNotification] and [showPreview] — goes through here,
+  /// so the user cannot get a plain-looking notification from one of them.
   ///
   /// The plugin renders `bigText`, `contentTitle` and `summaryText` through
   /// Android's `Html.fromHtml` when the matching `htmlFormat*` flag is set, so
-  /// the Arabic line can be bold above its Persian translation. HTML also means
-  /// the text must be escaped (see [_escapeHtml]) and that `<br>` is the line
-  /// break. Layout direction is forced with an RTL embedding control character
-  /// because notifications follow the *system* locale, not the app's.
+  /// the body can be laid out like a small card:
+  ///
+  /// ```
+  /// <b>ARABIC</b><br>persian translation<br><i>source</i>
+  /// ```
+  ///
+  /// HTML also means the text must be escaped (see [_escapeHtml]) and that
+  /// `<br>` is the line break. Layout direction is forced with RTL embedding
+  /// control characters — see the doc on [_rtlOpen] for the full mechanism and
+  /// why every single segment carries its own pair.
   ///
   /// [reminder] switches to the low-importance «یادآوری‌ها» channel used by the
-  /// preview and test notifications.
-  static NotificationDetails _details(_Message message,
-      {bool reminder = false}) {
+  /// preview and test notifications. [titleSuffix] is appended to both the
+  /// collapsed title and the expanded `contentTitle` («(تست)»), inside the bidi
+  /// wrapper so the suffix cannot flip the line.
+  static NotificationDetails _details(
+    _Message message, {
+    bool reminder = false,
+    String? titleSuffix,
+  }) {
+    final htmlTitle = titleSuffix == null || titleSuffix.trim().isEmpty
+        ? message.htmlTitle
+        : _htmlTitle('${message.title} ${titleSuffix.trim()}');
+
     final android = AndroidNotificationDetails(
       reminder ? _reminderChannelId : _dailyChannelId,
       reminder ? _reminderChannelName : _dailyChannelName,
@@ -742,25 +864,33 @@ class NotificationService {
       styleInformation: BigTextStyleInformation(
         message.htmlBody,
         htmlFormatBigText: true,
-        contentTitle: message.htmlTitle,
+        contentTitle: htmlTitle,
         htmlFormatContentTitle: true,
-        summaryText: _summaryTextFa,
+        summaryText: _htmlSegment(_summaryTextFa),
         htmlFormatSummaryText: true,
       ),
       // App name in the notification header.
-      subText: 'هُدا',
-      ticker: 'هُدا',
+      subText: _subTextFa,
+      // Heads-up / accessibility line: Persian and RTL-wrapped, otherwise this
+      // is the one place that still reads left-to-right.
+      ticker: message.ticker,
       // Branding: turquoise accent + matching LED pulse.
       color: HodaColors.turquoise,
       ledColor: HodaColors.turquoise,
-      ledOnMs: 900,
-      ledOffMs: 1800,
+      // Short pulse, long pause: a calm heartbeat rather than a blinking alarm.
+      ledOnMs: 400,
+      ledOffMs: 800,
       enableLights: !reminder,
       enableVibration: !reminder,
+      vibrationPattern: reminder ? null : _vibrationPattern,
       playSound: !reminder,
       channelShowBadge: !reminder,
       // Never hijack the whole screen — this is gentle spiritual content.
       fullScreenIntent: false,
+      autoCancel: true,
+      showWhen: true,
+      // The «alarm-ish» family that survives Do-Not-Disturb reminder
+      // allowances, without claiming to be an actual alarm.
       category: AndroidNotificationCategory.reminder,
       visibility: NotificationVisibility.public,
       // Several Hoda notifications collapse into one group in the shade.
@@ -783,10 +913,34 @@ class NotificationService {
 
   static String _rtl(String input) => '$_rtlOpen$input$_rtlClose';
 
+  /// Escapes [text], wraps it in the RTL embedding pair and puts the result
+  /// *inside* [tag] (`b`, `i`, … or none), which is where the bidi controls
+  /// belong — see the doc on [_rtlOpen].
+  static String _htmlSegment(String text, {String tag = ''}) {
+    final inner = _rtl(_escapeHtml(text));
+    return tag.isEmpty ? inner : '<$tag>$inner</$tag>';
+  }
+
+  /// Bold, escaped, RTL-wrapped title for `contentTitle`.
+  static String _htmlTitle(String plainTitle) =>
+      _htmlSegment(plainTitle, tag: 'b');
+
   // ---------------- scheduling engine ----------------
 
   /// Arms one schedule. Returns true when the plugin accepted it.
   /// Never throws — the settings UI keeps working either way.
+  ///
+  /// The body and the payload are built **once, here at arm time** by
+  /// [_message]: `matchDateTimeComponents: DateTimeComponents.time` makes the
+  /// OS re-post that same, already-rendered notification every day, so the
+  /// text the user reads and the `uid` in the payload always describe the same
+  /// item — tapping it can therefore open exactly that card.
+  ///
+  /// Limitation worth knowing: because the content is frozen at arm time, a
+  /// schedule that is never re-armed keeps showing the item picked back then.
+  /// [restoreSchedule] re-arms everything on each app start, which is what
+  /// refreshes the content in practice; a device that goes days without opening
+  /// the app repeats yesterday's item (and its uid) — consistent, just not new.
   static Future<bool> _armSchedule(
     NotificationSchedule schedule, {
     required bool exact,
@@ -833,7 +987,7 @@ class NotificationService {
   }) {
     return _plugin.zonedSchedule(
       schedule.notificationId,
-      message.title,
+      message.displayTitle,
       message.body,
       when,
       _details(message),
@@ -844,7 +998,7 @@ class NotificationService {
           UILocalNotificationDateInterpretation.absoluteTime,
       // Repeats every day at the same wall-clock time.
       matchDateTimeComponents: DateTimeComponents.time,
-      payload: _payloadFor(schedule.type, message.resolvedType),
+      payload: _payloadFor(schedule.type, message.resolvedType, message.uid),
     );
   }
 
@@ -854,14 +1008,15 @@ class NotificationService {
   static Future<bool> showTestNotification(String type) async {
     await _ensureReady();
     final message = await _message(type);
+    const suffix = '(تست)';
     return _guard(
       'show(test)',
       () => _plugin.show(
         _testNotificationId,
-        '${message.title} (تست)',
+        _rtl('${message.title} $suffix'),
         message.body,
-        _details(message),
-        payload: _payloadFor(type, message.resolvedType),
+        _details(message, titleSuffix: suffix),
+        payload: _payloadFor(type, message.resolvedType, message.uid),
       ),
     );
   }
@@ -871,14 +1026,19 @@ class NotificationService {
   static Future<bool> showPreview(NotificationSchedule schedule) async {
     await _ensureReady();
     final message = await _message(schedule.type, variant: schedule.id);
+    final suffix = '(پیش‌نمایش ${schedule.timeLabelFa})';
     return _guard(
       'show(preview #${schedule.id})',
       () => _plugin.show(
         _previewBaseId + schedule.id,
-        '${message.title} (پیش‌نمایش ${schedule.timeLabelFa})',
+        _rtl('${message.title} $suffix'),
         message.body,
-        _details(message, reminder: true),
-        payload: _payloadFor(schedule.type, message.resolvedType),
+        _details(message, reminder: true, titleSuffix: suffix),
+        payload: _payloadFor(
+          schedule.type,
+          message.resolvedType,
+          message.uid,
+        ),
       ),
     );
   }
@@ -1033,11 +1193,18 @@ class NotificationService {
 
   // ---------------- content picking ----------------
 
+  /// Shown when the database has nothing usable. Kept const, so the bidi
+  /// wrappers are spelled out through const interpolation instead of [_rtl].
+  static const String _fallbackTitleFa = '$_appNameFa 🌿';
+  static const String _fallbackBodyFa = 'امروز هم همراه تو هستیم 🌿';
+
   static const _Message _fallbackMessage = _Message(
-    title: 'هُدا 🌿',
-    body: 'امروز هم همراه تو هستیم 🌿',
-    htmlTitle: 'هُدا 🌿',
-    htmlBody: 'امروز هم همراه تو هستیم 🌿',
+    title: _fallbackTitleFa,
+    displayTitle: '$_rtlOpen$_fallbackTitleFa$_rtlClose',
+    body: '$_rtlOpen$_fallbackBodyFa$_rtlClose',
+    htmlTitle: '<b>$_rtlOpen$_fallbackTitleFa$_rtlClose</b>',
+    htmlBody: '$_rtlOpen$_fallbackBodyFa$_rtlClose',
+    ticker: '$_rtlOpen$_fallbackTitleFa$_rtlClose',
     resolvedType: 'random',
   );
 
@@ -1045,6 +1212,10 @@ class NotificationService {
   ///
   /// [variant] shifts the `random` rotation so five «تصادفی» schedules on the
   /// same day pick five different items instead of repeating one.
+  ///
+  /// The result carries the picked item's [DailyContent.uid] so the payload can
+  /// point a tap at that exact card; see [_armSchedule] for why the pick made
+  /// here stays the one the user eventually reads.
   static Future<_Message> _message(String requestedType,
       {int variant = 0}) async {
     try {
@@ -1056,30 +1227,48 @@ class NotificationService {
       final arabic = item.hasArabic ? _clip(item.arabic.trim(), 200) : '';
       final persian = item.hasPersian ? _clip(item.persian.trim(), 240) : '';
       if (arabic.isEmpty && persian.isEmpty) return _fallbackMessage;
+      // Third line of the card: «بقره ۲۵۵», «الکافی», the martyr's name…
+      final source = item.hasSource ? _clip(item.source.trim(), 90) : '';
 
       final plainTitle = item.title.trim().isEmpty
-          ? 'هُدا 🌿'
-          : 'هُدا 🌿 — ${item.title.trim()}';
+          ? _fallbackTitleFa
+          : '$_appNameFa 🌿 — ${item.title.trim()}';
 
-      // Plain body for the collapsed line and for iOS.
-      final plainBody = _rtl(
-        <String>[arabic, persian].where((e) => e.isNotEmpty).join('\n'),
-      );
+      // Heads-up ticker label: the item's own title, or the type's short
+      // Persian label when the row has none.
+      final tickerLabel = item.title.trim().isEmpty
+          ? NotificationSchedule.shortLabelForType(picked.key)
+          : item.title.trim();
 
-      // HTML body: bold Arabic on the first line, Persian translation below.
+      // Plain body for the collapsed line and for iOS. Each line is wrapped on
+      // its own: `\n` ends a bidi paragraph, which would drop a single wrapper
+      // spanning the whole block.
+      final plainLines = <String>[arabic, persian, source]
+          .where((e) => e.isNotEmpty)
+          .map(_rtl)
+          .toList();
+
+      // HTML body, laid out like a card:
+      //   <b>arabic</b><br>persian<br><i>source</i>
+      // Every segment carries its own bidi pair *inside* its tag; the whole
+      // block is wrapped once more so the paragraph itself starts RTL even on a
+      // ROM that strips the markup.
       final htmlParts = <String>[
-        if (arabic.isNotEmpty) '<b>${_escapeHtml(arabic)}</b>',
-        if (persian.isNotEmpty) _escapeHtml(persian),
+        if (arabic.isNotEmpty) _htmlSegment(arabic, tag: 'b'),
+        if (persian.isNotEmpty) _htmlSegment(persian),
+        if (source.isNotEmpty) _htmlSegment(source, tag: 'i'),
       ];
-      final htmlBody = _rtl(htmlParts.join('<br>'));
-      final htmlTitle = _rtl('<b>${_escapeHtml(plainTitle)}</b>');
 
       return _Message(
         title: plainTitle,
-        body: plainBody,
-        htmlTitle: htmlTitle,
-        htmlBody: htmlBody,
+        displayTitle: _rtl(plainTitle),
+        body: plainLines.join('\n'),
+        htmlTitle: _htmlTitle(plainTitle),
+        htmlBody: _rtl(htmlParts.join('<br>')),
+        // Heads-up ticker: short enough to be read at a glance, and RTL.
+        ticker: _rtl('$_appNameFa • $tickerLabel'),
         resolvedType: picked.key,
+        uid: item.uid,
       );
     } catch (_) {
       return _fallbackMessage;

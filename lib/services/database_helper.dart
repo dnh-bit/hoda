@@ -115,6 +115,13 @@ class DatabaseHelper {
   static Future<List<Map<String, dynamic>>> getAllNahj() =>
       _all('nahj_wisdoms');
 
+  /// Rows for the dhikr counter: title, arabic, benefits, instruction,
+  /// source and kind (salawat | dua). The salawat rows come first.
+  static Future<List<Map<String, dynamic>>> getAllSalawat() async {
+    final db = await database;
+    return db.query('salawat', orderBy: 'kind DESC, id');
+  }
+
   static Future<List<Map<String, dynamic>>> _all(String table) async {
     final db = await database;
     return db.query(table);

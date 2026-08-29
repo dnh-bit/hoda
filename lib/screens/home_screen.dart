@@ -331,65 +331,73 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Compact salawat counter for the AppBar corner: a tap icon + the persisted
-  /// total in Persian digits, tappable to open the full-screen counter.
-  /// Rebuilds itself from [SalawatStore.counts], so a tap on the counter screen
-  /// is reflected here without the shell having to reload anything.
+  /// Compact dhikr counter for the AppBar corner: a tap icon + the persisted
+  /// total of the selected dhikr in Persian digits, tappable to open the
+  /// full-screen counter.
+  /// Rebuilds itself from [SalawatStore.counts] and the selection, so a tap on
+  /// the counter screen is reflected here without the shell reloading anything.
   Widget _buildSalawatBadge() {
     final foreground = Theme.of(context).appBarTheme.foregroundColor ??
         Theme.of(context).colorScheme.onPrimary;
 
-    return ValueListenableBuilder<SalawatCounts>(
+    return ValueListenableBuilder<Map<int, SalawatCounts>>(
       valueListenable: SalawatStore.counts,
       builder: (context, counts, _) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsetsDirectional.only(start: 4),
-            child: Tooltip(
-              message: 'صلوات‌شمار — مجموع ${FaNum.number(counts.total)} صلوات',
-              child: Material(
-                color: foreground.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(20),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: _openSalawat,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // A tap/count icon, deliberately not a heart.
-                        const Icon(
-                          Icons.ads_click,
-                          size: 17,
-                          color: HodaColors.goldLight,
-                        ),
-                        const SizedBox(width: 5),
-                        // Clamped so a five/six-digit tally cannot overflow the
-                        // fixed leading slot of the AppBar.
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 40),
-                          child: Text(
-                            FaNum.number(counts.total),
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.fade,
-                            style: TextStyle(
-                              fontFamily: HodaTheme.fontFamily,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: foreground,
+        return ValueListenableBuilder<int>(
+          valueListenable: SalawatStore.selectedId,
+          builder: (context, selectedId, _) {
+            final tally = counts[selectedId] ?? SalawatCounts.zero;
+            return Center(
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(start: 4),
+                child: Tooltip(
+                  message:
+                      'ذکرشمار — مجموع ${FaNum.number(tally.total)} بار',
+                  child: Material(
+                    color: foreground.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: _openSalawat,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 5),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // A tap/count icon, deliberately not a heart.
+                            const Icon(
+                              Icons.ads_click,
+                              size: 17,
+                              color: HodaColors.goldLight,
                             ),
-                          ),
+                            const SizedBox(width: 5),
+                            // Clamped so a five/six-digit tally cannot overflow
+                            // the fixed leading slot of the AppBar.
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 40),
+                              child: Text(
+                                FaNum.number(tally.total),
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.fade,
+                                style: TextStyle(
+                                  fontFamily: HodaTheme.fontFamily,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: foreground,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

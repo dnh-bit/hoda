@@ -175,12 +175,31 @@ class _HomeScreenState extends State<HomeScreen> {
       _content = content;
       _error = error;
       _loading = false;
+      _shuffling = false;
     });
 
     // Cold start: the notification uid arrived while this load was running.
     final pending = _pendingUid;
     _pendingUid = null;
     if (pending != null && error == null) _scheduleOpen(pending);
+  }
+
+  bool _shuffling = false;
+
+  /// The «تغییر محتوای امروز» action: re-picks every daily card from a fresh
+  /// no-repeat shuffle and re-arms the daily notifications so their bodies
+  /// match the new picks the next time they fire.
+  Future<void> _shuffleDaily() async {
+    if (_shuffling) return;
+    setState(() => _shuffling = true);
+    try {
+      await ContentRepository.shuffleDaily();
+      // Re-arm so scheduled notifications carry the newly picked content.
+      await NotificationService.restoreSchedule();
+    } catch (_) {
+      // Never let the refresh button break the shell.
+    }
+    await _load();
   }
 
   void _openSalawat() {
@@ -227,6 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onOpenMartyrs: () => _selectTab(tabMartyrs),
             onOpenNahj: () => _selectTab(tabNahj),
             onRefresh: _load,
+            onShuffle: _shuffleDaily,
           ),
           ContentListView(
             items: _content.verses,

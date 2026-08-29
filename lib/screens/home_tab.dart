@@ -30,12 +30,17 @@ class HomeTab extends StatelessWidget {
     required this.onOpenMartyrs,
     required this.onOpenNahj,
     required this.onRefresh,
+    required this.onShuffle,
   });
 
   static const DailyContent _placeholder = DailyContent(
     title: 'محتوای امروز',
     persian: 'امروز محتوایی موجود نیست.',
   );
+
+  /// The «تغییر محتوا» action: swaps every daily card for a fresh random pick
+  /// (and re-arms the notifications with the new picks).
+  final Future<void> Function() onShuffle;
 
   void _openDetail(BuildContext context, DailyContent item) {
     Navigator.of(context).push(
@@ -49,6 +54,7 @@ class HomeTab extends StatelessWidget {
     final verse = content.dailyVerse ?? _placeholder;
     final hadith = content.dailyHadith ?? _placeholder;
     final martyr = content.dailyMartyr ?? _placeholder;
+    final nahj = content.dailyNahj;
     final zekr = content.dailyZekr;
 
     return RefreshIndicator(
@@ -62,15 +68,24 @@ class HomeTab extends StatelessWidget {
           SectionHeader(
             icon: Icons.wb_sunny_outlined,
             title: 'محتوای امروز',
-            action: Text(
-              FaNum.weekDay(DateTime.now()),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.tertiary,
-                fontWeight: FontWeight.w600,
-              ),
+            action: IconButton(
+              tooltip: 'تغییر محتوای امروز',
+              icon: const Icon(Icons.casino_outlined, size: 22),
+              color: theme.colorScheme.tertiary,
+              onPressed: onShuffle,
             ),
           ),
           const SizedBox(height: 12),
+          if (zekr != null) ...[
+            ContentCard(
+              content: zekr,
+              borderColor: HodaColors.turquoiseLight,
+              icon: Icons.auto_awesome,
+              maxPersianLines: 4,
+              onTap: () => _openDetail(context, zekr),
+            ),
+            const SizedBox(height: 12),
+          ],
           ContentCard(
             content: verse,
             borderColor: HodaColors.gold,
@@ -86,16 +101,14 @@ class HomeTab extends StatelessWidget {
             maxPersianLines: 6,
             onTap: () => _openDetail(context, hadith),
           ),
-          if (zekr != null) ...[
-            const SizedBox(height: 12),
-            ContentCard(
-              content: zekr,
-              borderColor: HodaColors.turquoiseLight,
-              icon: Icons.auto_awesome,
-              maxPersianLines: 4,
-              onTap: () => _openDetail(context, zekr),
-            ),
-          ],
+          const SizedBox(height: 12),
+          ContentCard(
+            content: nahj ?? _placeholder,
+            borderColor: HodaColors.gold,
+            icon: Icons.auto_stories,
+            maxPersianLines: 6,
+            onTap: () => _openDetail(context, nahj ?? _placeholder),
+          ),
           const SizedBox(height: 12),
           ContentCard(
             content: martyr,
@@ -134,7 +147,7 @@ class HomeTab extends StatelessWidget {
               ),
               QuickTile(
                 icon: Icons.volunteer_activism,
-                title: 'وصایا',
+                title: 'وصایای شهدا',
                 subtitle: 'پیام شهدا',
                 color: HodaColors.gold,
                 onTap: onOpenMartyrs,

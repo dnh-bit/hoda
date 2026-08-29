@@ -196,7 +196,18 @@ class ContentRepository {
   /// Loads only today's selection (cheap enough for the notification engine).
   static Future<HodaContent> loadDaily() async {
     final daily = await DatabaseHelper.getDailyContent();
+    return _buildDaily(daily);
+  }
 
+  /// Re-picks every daily slot through [DatabaseHelper.getDailyContentShuffled]
+  /// and returns the new selection. The rotation state advances, so the next
+  /// cards differ from the ones just shown.
+  static Future<HodaContent> shuffleDaily() async {
+    final daily = await DatabaseHelper.getDailyContentShuffled();
+    return _buildDaily(daily);
+  }
+
+  static HodaContent _buildDaily(Map<String, dynamic>? daily) {
     Map<String, dynamic>? pick(String key) {
       final value = daily?[key];
       if (value is Map) {

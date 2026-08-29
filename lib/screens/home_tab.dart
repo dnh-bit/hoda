@@ -83,7 +83,6 @@ class HomeTab extends StatelessWidget {
             icon: Icons.wb_sunny_outlined,
             title: 'محتوای امروز',
             action: TextButton.icon(
-              tooltip: 'تغییر محتوای امروز',
               onPressed: onShuffle,
               icon: _shufflingIndicator ?? const Icon(
                 Icons.refresh,

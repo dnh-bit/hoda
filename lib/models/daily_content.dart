@@ -16,6 +16,10 @@ class DailyContent {
   /// prefers it over the full [persian] text.
   final String? notifPersian;
 
+  /// «مفهوم (تفسیر)» — an explanatory modern gloss, currently populated for
+  /// Nahj wisdoms. Rendered inside the detail card behind a toggle button.
+  final String? tafsir;
+
   /// Stable identity of the database row this item came from, formatted as
   /// `<table>:<id>` (`verses:17`, `martyrs:3`, …). Populated by
   /// `ContentRepository`'s row mappers.
@@ -32,6 +36,7 @@ class DailyContent {
     this.source = '',
     this.note = '',
     this.notifPersian,
+    this.tafsir,
     this.uid,
   });
 
@@ -39,4 +44,7 @@ class DailyContent {
   bool get hasPersian => persian.trim().isNotEmpty;
   bool get hasSource => source.trim().isNotEmpty;
   bool get hasNote => note.trim().isNotEmpty;
+
+  /// Whether a «مفهوم» toggle should be offered on the detail card.
+  bool get hasTafsir => tafsir?.trim().isNotEmpty ?? false;
 }

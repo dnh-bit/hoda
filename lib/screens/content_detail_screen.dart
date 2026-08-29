@@ -6,15 +6,24 @@ import '../theme/hoda_theme.dart';
 import '../widgets/arabic_text.dart';
 
 /// Full-text view for a single piece of content (nothing is truncated here).
-class ContentDetailScreen extends StatelessWidget {
+class ContentDetailScreen extends StatefulWidget {
   final DailyContent content;
 
   const ContentDetailScreen({super.key, required this.content});
 
+  @override
+  State<ContentDetailScreen> createState() => _ContentDetailScreenState();
+}
+
+class _ContentDetailScreenState extends State<ContentDetailScreen> {
+  /// Whether the «مفهوم (تفسیر)» panel is expanded. Only meaningful when the
+  /// content actually carries one ([DailyContent.hasTafsir]).
+  bool _tafsirOpen = false;
+
   String get _plainText => [
-        if (content.hasArabic) content.arabic,
-        if (content.hasPersian) content.persian,
-        if (content.hasSource) content.source,
+        if (widget.content.hasArabic) widget.content.arabic,
+        if (widget.content.hasPersian) widget.content.persian,
+        if (widget.content.hasSource) widget.content.source,
       ].join('\n\n');
 
   Future<void> _copy(BuildContext context) async {
@@ -28,6 +37,7 @@ class ContentDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final content = widget.content;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -69,6 +79,69 @@ class ContentDetailScreen extends StatelessWidget {
               textAlign: TextAlign.justify,
               style: theme.textTheme.bodyLarge,
             ),
+          // «مفهوم (تفسیر)» — a collapsible panel behind its own button so the
+          // card stays focused on the wisdom itself until the reader asks for
+          // the explanation.
+          if (content.hasTafsir) ...[
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: () => setState(() => _tafsirOpen = !_tafsirOpen),
+              icon: Icon(
+                _tafsirOpen
+                    ? Icons.expand_less_outlined
+                    : Icons.lightbulb_outline,
+                size: 20,
+              ),
+              label: Text(_tafsirOpen ? 'بستن مفهوم' : 'مفهوم و تفسیر'),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.tertiary,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+            ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 220),
+              crossFadeState: _tafsirOpen
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox(width: double.infinity),
+              secondChild: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: HodaColors.gold.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: HodaColors.gold.withOpacity(0.35),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline,
+                            size: 16, color: theme.colorScheme.tertiary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'مفهوم',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      content.tafsir!,
+                      textAlign: TextAlign.justify,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           if (content.hasNote) ...[
             const SizedBox(height: 20),
             Container(

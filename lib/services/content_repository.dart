@@ -139,6 +139,9 @@ class ContentRepository {
 
   static DailyContent nahjFrom(Map<String, dynamic> row, {String? title}) {
     final number = _s(row['number']);
+    // «مفهوم (تفسیر)» — a short modern explanation of the wisdom. Empty when
+    // the row predates the column or has none written for it.
+    final tafsir = _s(row['tafsir']);
     return DailyContent(
       title: title ??
           (number.isEmpty ? 'حکمت' : 'حکمت ${FaNum.digits(number)}'),
@@ -148,6 +151,7 @@ class ContentRepository {
       note: _s(row['translator']).isEmpty
           ? ''
           : 'ترجمه: ${_s(row['translator'])}',
+      tafsir: tafsir.isEmpty ? null : tafsir,
       uid: _uid('nahj_wisdoms', row, '$number|${_s(row['arabic'])}'),
     );
   }

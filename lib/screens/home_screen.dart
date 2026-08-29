@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/content_repository.dart';
+import '../services/notification_service.dart';
 import '../services/salawat_store.dart';
 import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
@@ -19,6 +20,10 @@ import 'settings_screen.dart';
 /// UI) which opens the full-screen counter, and as the «صلوات» tab which embeds
 /// the very same counter widget. Favorites and settings are pushed as routes so
 /// the bottom bar always reflects the visible tab.
+///
+/// It is also the target of notification tap routing: it listens to
+/// [NotificationService.onNotificationTap] and switches to the tab that matches
+/// the tapped notification's content type.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -34,6 +39,15 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int tabNahj = 4;
   static const int tabSalawat = 5;
 
+  /// Notification payload type -> tab. Anything missing (including `random`
+  /// when the concrete type could not be resolved) falls back to [tabHome].
+  static const Map<String, int> _tabForPayloadType = <String, int>{
+    'verse': tabVerses,
+    'hadith': tabHadiths,
+    'martyr': tabMartyrs,
+    'nahj': tabNahj,
+  };
+
   int _currentIndex = tabHome;
   HodaContent _content = const HodaContent();
   bool _loading = true;
@@ -43,6 +57,39 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _load();
+
+    // A cold start can emit the launch payload before this listener is
+    // attached, so the current value is applied once up-front.
+    NotificationService.onNotificationTap.addListener(_onNotificationTap);
+    _applyPayloadType(
+      NotificationService.onNotificationTap.value,
+      viaSetState: false,
+    );
+  }
+
+  @override
+  void dispose() {
+    NotificationService.onNotificationTap.removeListener(_onNotificationTap);
+    super.dispose();
+  }
+
+  void _onNotificationTap() {
+    _applyPayloadType(NotificationService.onNotificationTap.value);
+  }
+
+  /// Switches to the tab matching a notification payload type.
+  ///
+  /// The service resets its notifier to null before every emission, so a null
+  /// value simply means «nothing to route».
+  void _applyPayloadType(String? type, {bool viaSetState = true}) {
+    if (type == null) return;
+    final target = _tabForPayloadType[type] ?? tabHome;
+    if (!viaSetState) {
+      _currentIndex = target;
+      return;
+    }
+    if (!mounted || _currentIndex == target) return;
+    setState(() => _currentIndex = target);
   }
 
   Future<void> _load() async {

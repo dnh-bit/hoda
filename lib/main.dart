@@ -46,11 +46,18 @@ Future<void> main() async {
     await ThemeController.load();
     runApp(const HodaApp());
 
-    // Re-arm the daily notification after a reboot, an app update or a
-    // force-stop (AlarmManager drops alarms in all three cases). Deliberately
+    // Re-arm every enabled daily notification after a reboot, an app update or
+    // a force-stop (AlarmManager drops alarms in all three cases). Deliberately
     // not awaited so it never delays the first frame; it swallows its own
     // errors internally.
     unawaited(NotificationService.restoreSchedule());
+
+    // Cold start from a notification tap: replay the payload once the shell is
+    // mounted and listening, so it can switch to the matching tab. Also drains
+    // a tap that the background isolate parked while the app was dead.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(NotificationService.handleAppLaunchTap());
+    });
   }, (error, stack) {
     AppError.record(error, stack);
   });

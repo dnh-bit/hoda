@@ -30,7 +30,24 @@ jobs:
         id: ver
         shell: bash
         run: |
-          echo "version=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          V=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d ' ')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          # short version without the build number, e.g. 0.0.8 from 0.0.8+1
+          echo "short=${V%%+*}" >> "$GITHUB_OUTPUT"
+
+      # Restore the upload keystore from repo secrets (base64 of the .jks)
+      - name: Decode signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.HODA_UPLOAD_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.HODA_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/hoda-upload.jks
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEYSTORE_PASSWORD
+          keyAlias=hoda-upload
+          storeFile=hoda-upload.jks
+          EOF
 
       - name: Install dependencies
         run: flutter pub get
@@ -38,29 +55,40 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
+      # Rename the APK so every release carries a meaningful, versioned file
+      - name: Rename APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "build/app/outputs/flutter-apk/hoda-v${{ steps.ver.outputs.short }}.apk"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: hoda-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/hoda-v*.apk
 
-      # Automatically archive every build as a GitHub Release
+      # Automatically archive every build as a GitHub Release:
+      #   tag + release title = version number (e.g. 0.0.8), asset = hoda-v0.0.8.apk
       - name: Create Release
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          TAG="v$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d ' ')"
+          TAG="v${{ steps.ver.outputs.version }}"
+          TITLE="${{ steps.ver.outputs.short }}"
+          APK="build/app/outputs/flutter-apk/hoda-v${{ steps.ver.outputs.short }}.apk"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists — updating assets"
-            gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk \
-              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
           else
             echo "Creating release $TAG"
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "$TAG" \
-              --notes "نسخه $TAG از اپلیکیشن هُدا — بیلد خودکار" \
-              build/app/outputs/flutter-apk/app-release.apk
+              --title "$TITLE" \
+              --notes "اپلیکیشن هُدا — نسخه $TITLE
+          📱 فایل نصبی: hoda-v${{ steps.ver.outputs.short }}.apk
+
+          این بیلد خودکار از آخرین کد شاخه main ساخته شده است." \
+              "$APK"
           fi

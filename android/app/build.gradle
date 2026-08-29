@@ -5,6 +5,15 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Stable upload signing: keeps the same signature across releases so Android
+// installs updates in-place (no uninstall needed). Falls back to the debug key
+// when android/key.properties is absent (local dev builds).
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.hoda.hoda"
     compileSdk = flutter.compileSdkVersion
@@ -32,9 +41,19 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Stable signing config so every release shares one signature and
+            // updates install over the previous version without uninstalling.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.create("upload") {
+                    storeFile file(keystoreProperties['storeFile'])
+                    storePassword keystoreProperties['storePassword']
+                    keyAlias keystoreProperties['keyAlias']
+                    keyPassword keystoreProperties['keyPassword']
+                }
+            } else {
+                // Fallback for local dev builds without key.properties.
+                signingConfig = signingConfigs.debug
+            }
 
             // R8 shrinking (on by default for Flutter release builds) strips the
             // generic signatures Gson needs, which made

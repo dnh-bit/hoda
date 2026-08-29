@@ -247,6 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onOpenNahj: () => _selectTab(tabNahj),
             onRefresh: _load,
             onShuffle: _shuffleDaily,
+            shuffling: _shuffling,
           ),
           ContentListView(
             items: _content.verses,

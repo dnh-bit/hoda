@@ -124,11 +124,17 @@ class ContentRepository {
   }
 
   static DailyContent hadithFrom(Map<String, dynamic> row, {String? title}) {
+    final narrator = _s(row['narrator']);
+    final source = _s(row['source']);
+    // Source line: «گوینده — کتاب، جلد، صفحه» when the narrator is known.
+    final sourceLine = narrator.isEmpty
+        ? source
+        : (source.isEmpty ? narrator : '$narrator — $source');
     return DailyContent(
       title: title ?? 'حدیث',
       arabic: _s(row['arabic']),
       persian: _s(row['farsi']),
-      source: _s(row['source']),
+      source: sourceLine,
       uid: _uid(
         'hadiths',
         row,
@@ -207,6 +213,13 @@ class ContentRepository {
     return _buildDaily(daily);
   }
 
+  /// Title for the home card of today's Nahj wisdom: «حکمت روز — حکمت N» so the
+  /// wisdom's position is always visible, per user request.
+  static String _dailyNahjTitle(dynamic number, String fallback) {
+    final n = _s(number);
+    return n.isEmpty ? fallback : '$fallback — حکمت ${FaNum.digits(n)}';
+  }
+
   static HodaContent _buildDaily(Map<String, dynamic>? daily) {
     Map<String, dynamic>? pick(String key) {
       final value = daily?[key];
@@ -229,7 +242,10 @@ class ContentRepository {
           hadithRow == null ? null : hadithFrom(hadithRow, title: 'حدیث روز'),
       dailyMartyr:
           martyrRow == null ? null : martyrFrom(martyrRow, title: 'وصیت شهید'),
-      dailyNahj: nahjRow == null ? null : nahjFrom(nahjRow, title: 'حکمت روز'),
+      dailyNahj: nahjRow == null
+          ? null
+          : nahjFrom(nahjRow,
+              title: _dailyNahjTitle(nahjRow['number'], 'حکمت روز')),
       dailyZekr: zekrRow == null ? null : zekrFrom(zekrRow),
     );
   }

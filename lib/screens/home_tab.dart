@@ -31,6 +31,7 @@ class HomeTab extends StatelessWidget {
     required this.onOpenNahj,
     required this.onRefresh,
     required this.onShuffle,
+    this.shuffling = false,
   });
 
   static const DailyContent _placeholder = DailyContent(
@@ -41,6 +42,19 @@ class HomeTab extends StatelessWidget {
   /// The «تغییر محتوا» action: swaps every daily card for a fresh random pick
   /// (and re-arms the notifications with the new picks).
   final Future<void> Function() onShuffle;
+
+  /// True while the parent is re-picking content; swaps the reload icon for a
+  /// small spinner so the tap is visibly acknowledged.
+  final bool shuffling;
+
+  Widget? get _shufflingIndicator =>
+      shuffling
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : null;
 
   void _openDetail(BuildContext context, DailyContent item) {
     Navigator.of(context).push(
@@ -68,11 +82,22 @@ class HomeTab extends StatelessWidget {
           SectionHeader(
             icon: Icons.wb_sunny_outlined,
             title: 'محتوای امروز',
-            action: IconButton(
+            action: TextButton.icon(
               tooltip: 'تغییر محتوای امروز',
-              icon: const Icon(Icons.casino_outlined, size: 22),
-              color: theme.colorScheme.tertiary,
               onPressed: onShuffle,
+              icon: _shufflingIndicator ?? const Icon(
+                Icons.refresh,
+                size: 20,
+              ),
+              label: const Text(
+                'تغییر محتوای امروز',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.tertiary,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 36),
+              ),
             ),
           ),
           const SizedBox(height: 12),

@@ -17,7 +17,13 @@ class DatabaseHelper {
   /// `assets/hoda.db` changes structurally (new tables/columns) or wholesale
   /// (v0.1.0 content refresh): existing installs then re-copy the bundled file
   /// over their stale copy. Pure row additions don't need a bump.
-  static const int dbContentVersion = 2;
+  ///
+  /// History: 2 = v0.1.0 refresh (185 verses, new salawat schema, tafsir +
+  /// notif_excerpt columns). 3 = v0.1.2 fixes (trailing citation numbers
+  /// stripped from martyr wills, hadith narrator column added). The stamp was
+  /// left at 2 through 0.1.0–0.1.1, so upgraded installs already carrying
+  /// stamp 2 skipped the re-copy and kept the pre-fix data — hence the bump.
+  static const int dbContentVersion = 3;
 
   static const String _stampKey = 'hoda_db_content_version';
 

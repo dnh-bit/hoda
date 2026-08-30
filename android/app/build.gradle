@@ -36,12 +36,15 @@ android {
         versionName = flutter.versionName
         // App stores (e.g. Cafe Bazaar) order updates by versionCode, which Flutter
         // derives from the build number after '+' in pubspec.yaml. To keep that code
-        // monotonic and readable we recompute it from the version name:
-        //   versionCode = major*1000 + minor*100 + patch  (0.1.2 -> 102, 1.0.0 -> 1000)
-        // The pubspec build number is then irrelevant; never set it below a code an
-        // installed build already carries.
+        // monotonic and readable we recompute it from the version name by simple
+        // digit concatenation (user's chosen scheme):
+        //   versionCode = int("major" + "minor" + "patch")
+        //   0.1.2 -> 012, 0.1.3 -> 013, 0.1.10 -> 0110, 1.0.0 -> 100
+        // Monotonic as long as we never skip a whole minor run (0.1.x -> 0.2.x etc.).
+        // Known theoretical collision (0.10.0 vs 1.0.0 -> 0100/100) is far off; revisit
+        // before reaching 0.10 or 1.0.
         def vParts = (flutter.versionName as String).split('\\.')
-        versionCode = (vParts[0] as int) * 1000 + (vParts[1] as int) * 100 + (vParts[2] as int)
+        versionCode = (vParts[0] + vParts[1] + vParts[2]).toInteger()
     }
 
     buildTypes {

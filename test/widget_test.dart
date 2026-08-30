@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hoda/app.dart';
 import 'package:hoda/models/daily_content.dart';
+import 'package:hoda/screens/settings_screen.dart';
 import 'package:hoda/services/content_repository.dart';
 import 'package:hoda/services/notification_service.dart';
 import 'package:hoda/services/salawat_store.dart';
@@ -89,6 +92,21 @@ void main() {
       expect(content.findByUid('verses:999'), isNull);
       expect(content.findByUid(null), isNull);
       expect(content.findByUid(''), isNull);
+    });
+  });
+
+  group('settings version const', () {
+    test('kHodaVersionFa matches pubspec version', () {
+      // Guards against the settings screen showing a stale version.
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      final m =
+          RegExp(r'^version:\s*(\d+)\.(\d+)\.(\d+)').firstMatch(pubspec)!;
+      final expected = '${FaNum.digits(m.group(1)!)}'
+          '‏.${FaNum.digits(m.group(2)!)}'
+          '‏.${FaNum.digits(m.group(3)!)}';
+      // Ignore any ZWNJ separators when comparing.
+      String strip(String s) => s.replaceAll('\u200c', '');
+      expect(strip(kHodaVersionFa), strip(expected));
     });
   });
 }

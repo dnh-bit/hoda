@@ -1,7 +1,7 @@
 name: hoda
 description: "هُدا - اپلیکیشن معنوی روزانه"
 publish_to: 'none'
-version: 0.1.2+12
+version: 0.1.3+13
 
 environment:
   sdk: ^3.5.4

@@ -31,6 +31,7 @@ class HomeTab extends StatelessWidget {
     required this.onOpenNahj,
     required this.onRefresh,
     required this.onShuffle,
+    required this.onOpenSettings,
     this.shuffling = false,
   });
 
@@ -46,6 +47,9 @@ class HomeTab extends StatelessWidget {
   /// True while the parent is re-picking content; swaps the reload icon for a
   /// small spinner so the tap is visibly acknowledged.
   final bool shuffling;
+
+  /// Opens the settings screen (notification manager lives there).
+  final VoidCallback onOpenSettings;
 
   Widget? get _shufflingIndicator =>
       shuffling
@@ -229,23 +233,32 @@ class HomeTab extends StatelessWidget {
                 ?.copyWith(color: Colors.white.withOpacity(0.9)),
           ),
           const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+          // «تنظیم اعلان» — turns the decorative sun-chip into the main entry
+          // point to the notification manager, so users can find it without
+          // digging through the AppBar menu.
+          Material(
+            color: Colors.white.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(30),
+            child: InkWell(
               borderRadius: BorderRadius.circular(30),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.wb_sunny, color: Colors.amberAccent, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'ذکر روز و هدایت معنوی',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: Colors.white),
+              onTap: onOpenSettings,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.notifications_active_outlined,
+                        color: Colors.amberAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'تنظیم اعلان',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: Colors.white),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

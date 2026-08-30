@@ -29,14 +29,19 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.hoda.hoda"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23 // flutter.minSdkVersion (21) is too low for flutter_local_notifications v17+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // App stores (e.g. Cafe Bazaar) order updates by versionCode, which Flutter
+        // derives from the build number after '+' in pubspec.yaml. To keep that code
+        // monotonic and readable we recompute it from the version name:
+        //   versionCode = major*1000 + minor*100 + patch  (0.1.2 -> 102, 1.0.0 -> 1000)
+        // The pubspec build number is then irrelevant; never set it below a code an
+        // installed build already carries.
+        def vParts = (flutter.versionName as String).split('\\.')
+        versionCode = (vParts[0] as int) * 1000 + (vParts[1] as int) * 100 + (vParts[2] as int)
     }
 
     buildTypes {

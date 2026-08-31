@@ -64,3 +64,22 @@ Latest release: https://github.com/dnh-bit/hoda/releases/latest
 3. If the form asks for SHA-256 of the APK signing certificate, get it with:
    `keytool -printcert -jarfile hoda-v0.1.4.apk | grep SHA256`
 4. After submission, replies usually arrive by email within 1–7 days. If rejected again, reply asking for the specific policy or detection verdict name (e.g. "Trojan:Generic / PUA:…") so you can address it precisely.
+
+## ⚡ Short version (≤1000 chars — for the form's character limit)
+
+The form limits «Additional information» to 1000 characters. This version is 996 chars — copy it directly:
+
+```
+Hi,
+
+Hoda (package: com.hoda.hoda) is a free, open-source, fully OFFLINE Persian spiritual app: Quranic verses with Persian translations, narrations of the Fourteen Infallibles, wills of fallen soldiers (a well-documented cultural genre in Iran) and Nahj al-Balagha sayings, plus a local tap counter. The content database ships inside the APK: the app has NO internet permission and fetches nothing.
+
+Permissions (all): POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, RECEIVE_BOOT_COMPLETED, VIBRATE — for the user's own daily reminders and counter haptics. No ads, no analytics, no trackers, no login, no data collection.
+
+Nothing can install software, phish or act covertly: there is no network activity at all. All source code is public at https://github.com/dnh-bit/hoda, and releases are reproducible via public GitHub Actions.
+
+We follow Google Play policies and will fix anything specific immediately. Please reconsider the flag and restore distribution.
+
+Best regards,
+The Hoda development team
+```

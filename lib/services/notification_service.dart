@@ -468,7 +468,11 @@ class NotificationService {
   /// Turns every schedule on/off at once. Returns the fresh [scheduleStatus].
   ///
   /// When enabling, the OS permission is requested first; a denial is written
-  /// back as «off» so the UI never promises notifications that cannot show.
+  /// back as master-off. If the user has never configured any schedule of
+  /// their own (the list is empty), enabling seeds the four Hoda defaults —
+  /// 07:00 آیه روز، 10:00 حدیث روز، 13:00 حکمت روز، 16:00 وصیت شهید — all
+  /// enabled, so one tap gives a complete day of reminders. Users can then
+  /// edit or disable each slot individually in the settings screen.
   static Future<Map<String, dynamic>> setMasterEnabled(bool enabled) async {
     if (!enabled) {
       await _writeMaster(false);
@@ -483,9 +487,33 @@ class NotificationService {
       return scheduleStatus();
     }
 
+    // Seed the defaults for a fresh setup. Two cases count as «fresh»:
+    //  - an empty list, or
+    //  - the single 08:00 «random» placeholder that the 0.0.x legacy
+    //    migration creates on first run (user never configured anything).
+    // A list the user actually configured is respected untouched.
+    final existing = await schedules();
+    final bool isFreshSetup = existing.isEmpty ||
+        (existing.length == 1 &&
+            existing.first.hour == 8 &&
+            existing.first.minute == 0 &&
+            existing.first.type == 'random');
+    if (isFreshSetup) {
+      await _writeSchedules(NotificationSchedule.sorted(_defaultSchedules()));
+    }
+
     await _writeMaster(true);
     return scheduleAll(interactive: true);
   }
+
+  /// The four pre-installed daily notifications:
+  /// 07:00 آیه روز، 10:00 حدیث روز، 13:00 حکمت روز، 16:00 وصیت شهید.
+  static List<NotificationSchedule> _defaultSchedules() => const [
+        NotificationSchedule(id: 0, enabled: true, hour: 7, minute: 0, type: 'verse'),
+        NotificationSchedule(id: 1, enabled: true, hour: 10, minute: 0, type: 'hadith'),
+        NotificationSchedule(id: 2, enabled: true, hour: 13, minute: 0, type: 'nahj'),
+        NotificationSchedule(id: 3, enabled: true, hour: 16, minute: 0, type: 'martyr'),
+      ];
 
   /// Adds or replaces the schedule with [schedule]'s id and re-arms.
   static Future<Map<String, dynamic>> upsert(

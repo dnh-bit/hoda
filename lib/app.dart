@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/theme_controller.dart';
 import 'theme/hoda_theme.dart';
 import 'utils/app_error.dart';
@@ -34,10 +35,45 @@ class HodaApp extends StatelessWidget {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              home: const HomeScreen(),
+              // First launch shows the onboarding slides; afterwards the shell
+              // (the gate resolves on every app start, before the first frame
+              // of the shell is built, via the FutureBuilder below).
+              home: const _AppGate(),
             );
           },
         );
+      },
+    );
+  }
+}
+
+/// Decides between the onboarding slides and the main shell on app start.
+class _AppGate extends StatelessWidget {
+  const _AppGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: OnboardingScreen.shouldShow(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          // One frame at most — the preference read is a millisecond or two.
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: HodaColors.turquoise),
+            ),
+          );
+        }
+        if (snapshot.data == true) {
+          return OnboardingScreen(
+            onDone: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+              );
+            },
+          );
+        }
+        return const HomeScreen();
       },
     );
   }

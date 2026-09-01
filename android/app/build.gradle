@@ -48,11 +48,14 @@ android {
         // before digit-concatenation, so 0.1.5-beta still yields code 015.
         def patchDigits = vParts[2].replaceAll('[^0-9].*\$', '')
         def concatCode = (vParts[0] + vParts[1] + patchDigits).toInteger()
-        // Re-promoting a prerelease to stable (0.1.5-beta+15 → 0.1.5+17) must
+        // Re-promoting a prerelease to stable (0.1.5-beta+15 → 0.1.5+18) must
         // never reuse the same code, or the store rejects the update. Take the
         // larger of the concatenated scheme and the pubspec build number.
-        def buildNumber = (flutter.buildNumber ?: '0').toInteger()
-        versionCode = Math.max(concatCode, buildNumber)
+        // The Flutter tool exposes the build number via the
+        // flutter.versionCode property (= build number by default), so read it
+        // from there — there is no `flutter.buildNumber` extension property.
+        def buildNumberCode = (flutter.versionCode ?: '0').toInteger()
+        versionCode = Math.max(concatCode, buildNumberCode)
     }
 
     buildTypes {

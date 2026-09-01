@@ -20,10 +20,9 @@ class DatabaseHelper {
   ///
   /// History: 2 = v0.1.0 refresh (185 verses, new salawat schema, tafsir +
   /// notif_excerpt columns). 3 = v0.1.2 fixes (trailing citation numbers
-  /// stripped from martyr wills, hadith narrator column added). The stamp was
-  /// left at 2 through 0.1.0–0.1.1, so upgraded installs already carrying
-  /// stamp 2 skipped the re-copy and kept the pre-fix data — hence the bump.
-  static const int dbContentVersion = 3;
+  /// stripped, hadith narrator column). 4 = v0.1.5-beta (hadith family column
+  /// for the topic filter).
+  static const int dbContentVersion = 4;
 
   static const String _stampKey = 'hoda_db_content_version';
 

@@ -46,16 +46,11 @@ android {
         def vParts = (flutter.versionName as String).split('\\.')
         // Strip any prerelease suffix ("-beta", "-rc1", …) from the patch part
         // before digit-concatenation, so 0.1.5-beta still yields code 015.
+        // User's chosen scheme: pure digit concatenation, no build-number
+        // blending (the app is not on a store yet, so code collisions between
+        // prereleases and stables are acceptable — user decision 2026-09).
         def patchDigits = vParts[2].replaceAll('[^0-9].*\$', '')
-        def concatCode = (vParts[0] + vParts[1] + patchDigits).toInteger()
-        // Re-promoting a prerelease to stable (0.1.5-beta+15 → 0.1.5+18) must
-        // never reuse the same code, or the store rejects the update. Take the
-        // larger of the concatenated scheme and the pubspec build number.
-        // The Flutter tool exposes the build number via the
-        // flutter.versionCode property (= build number by default), so read it
-        // from there — there is no `flutter.buildNumber` extension property.
-        def buildNumberCode = (flutter.versionCode ?: '0').toInteger()
-        versionCode = Math.max(concatCode, buildNumberCode)
+        versionCode = (vParts[0] + vParts[1] + patchDigits).toInteger()
     }
 
     buildTypes {

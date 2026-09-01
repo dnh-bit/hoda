@@ -47,7 +47,12 @@ android {
         // Strip any prerelease suffix ("-beta", "-rc1", …) from the patch part
         // before digit-concatenation, so 0.1.5-beta still yields code 015.
         def patchDigits = vParts[2].replaceAll('[^0-9].*\$', '')
-        versionCode = (vParts[0] + vParts[1] + patchDigits).toInteger()
+        def concatCode = (vParts[0] + vParts[1] + patchDigits).toInteger()
+        // Re-promoting a prerelease to stable (0.1.5-beta+15 → 0.1.5+17) must
+        // never reuse the same code, or the store rejects the update. Take the
+        // larger of the concatenated scheme and the pubspec build number.
+        def buildNumber = (flutter.buildNumber ?: '0').toInteger()
+        versionCode = Math.max(concatCode, buildNumber)
     }
 
     buildTypes {

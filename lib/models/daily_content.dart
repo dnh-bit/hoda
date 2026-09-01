@@ -20,6 +20,10 @@ class DailyContent {
   /// Nahj wisdoms. Rendered inside the detail card behind a toggle button.
   final String? tafsir;
 
+  /// Topic family for list filtering (hadiths only, e.g. «اخلاق و کردار»).
+  /// Not rendered anywhere by itself; drives the filter chips.
+  final String? family;
+
   /// Stable identity of the database row this item came from, formatted as
   /// `<table>:<id>` (`verses:17`, `martyrs:3`, …). Populated by
   /// `ContentRepository`'s row mappers.
@@ -37,6 +41,7 @@ class DailyContent {
     this.note = '',
     this.notifPersian,
     this.tafsir,
+    this.family,
     this.uid,
   });
 

@@ -261,6 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
             heading: 'احادیث معصومین (ع)',
             emptyText: 'حدیثی یافت نشد',
             icon: Icons.format_quote,
+            familiesOf: (item) => item.family,
           ),
           ContentListView(
             items: _content.martyrs,

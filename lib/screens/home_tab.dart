@@ -4,6 +4,7 @@ import '../models/daily_content.dart';
 import '../services/content_repository.dart';
 import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
+import '../utils/jalali_date.dart';
 import '../widgets/content_card.dart';
 import '../widgets/hoda_logo.dart';
 import '../widgets/quick_tile.dart';
@@ -50,6 +51,31 @@ class HomeTab extends StatelessWidget {
 
   /// Opens the settings screen (notification manager lives there).
   final VoidCallback onOpenSettings;
+
+  /// The decorative header chip: today's full Jalali date, e.g.
+  /// «پنجشنبه ۸ شهریور ۱۴۰۵». Pure decoration + calendar awareness.
+  Widget _headerDateChip(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.calendar_today_outlined,
+              color: Colors.amberAccent, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            JalaliDate.fullFa(DateTime.now()),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget? get _shufflingIndicator =>
       shuffling
@@ -232,10 +258,11 @@ class HomeTab extends StatelessWidget {
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: Colors.white.withOpacity(0.9)),
           ),
-          const SizedBox(height: 20),
-          // «تنظیم اعلان» — turns the decorative sun-chip into the main entry
-          // point to the notification manager, so users can find it without
-          // digging through the AppBar menu.
+          const SizedBox(height: 18),
+          _headerDateChip(theme),
+          const SizedBox(height: 12),
+          // «تنظیم اعلان» — the header's action button: opens the notification
+          // manager without digging through the AppBar menu.
           Material(
             color: Colors.white.withOpacity(0.14),
             borderRadius: BorderRadius.circular(30),

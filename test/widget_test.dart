@@ -98,14 +98,17 @@ void main() {
   group('settings version const', () {
     test('kHodaVersionFa matches pubspec version', () {
       // Guards against the settings screen showing a stale version.
+      // The const may carry a suffix («۰.۱.۵ بتا» for a beta build) — the
+      // numeric prefix must still match pubspec's X.Y.Z.
       final pubspec = File('pubspec.yaml').readAsStringSync();
       final m =
           RegExp(r'^version:\s*(\d+)\.(\d+)\.(\d+)').firstMatch(pubspec)!;
       final expected = '${FaNum.digits(m.group(1)!)}'
           '‏.${FaNum.digits(m.group(2)!)}'
           '‏.${FaNum.digits(m.group(3)!)}';
-      // Ignore any ZWNJ separators when comparing.
-      String strip(String s) => s.replaceAll('\u200c', '');
+      // Compare only the numeric prefix; ignore ZWNJ and any suffix (بتا…).
+      String strip(String s) =>
+          s.replaceAll('\u200c', '').split(' ').first;
       expect(strip(kHodaVersionFa), strip(expected));
     });
   });

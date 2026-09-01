@@ -44,7 +44,10 @@ android {
         // Known theoretical collision (0.10.0 vs 1.0.0 -> 0100/100) is far off; revisit
         // before reaching 0.10 or 1.0.
         def vParts = (flutter.versionName as String).split('\\.')
-        versionCode = (vParts[0] + vParts[1] + vParts[2]).toInteger()
+        // Strip any prerelease suffix ("-beta", "-rc1", …) from the patch part
+        // before digit-concatenation, so 0.1.5-beta still yields code 015.
+        def patchDigits = vParts[2].replaceAll('[^0-9].*\$', '')
+        versionCode = (vParts[0] + vParts[1] + patchDigits).toInteger()
     }
 
     buildTypes {

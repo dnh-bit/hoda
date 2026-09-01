@@ -142,6 +142,35 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
               ),
             ),
           ],
+          if (content.family != null && content.family!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: HodaColors.turquoise.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.sell_outlined,
+                        size: 14, color: theme.colorScheme.tertiary),
+                    const SizedBox(width: 6),
+                    Text(
+                      content.family!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.tertiary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           if (content.hasNote) ...[
             const SizedBox(height: 20),
             Container(

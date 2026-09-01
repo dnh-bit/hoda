@@ -126,6 +126,7 @@ class ContentRepository {
   static DailyContent hadithFrom(Map<String, dynamic> row, {String? title}) {
     final narrator = _s(row['narrator']);
     final source = _s(row['source']);
+    final family = _s(row['family']);
     // Source line: «گوینده — کتاب، جلد، صفحه» when the narrator is known.
     final sourceLine = narrator.isEmpty
         ? source
@@ -135,6 +136,7 @@ class ContentRepository {
       arabic: _s(row['arabic']),
       persian: _s(row['farsi']),
       source: sourceLine,
+      family: family.isEmpty ? null : family,
       uid: _uid(
         'hadiths',
         row,

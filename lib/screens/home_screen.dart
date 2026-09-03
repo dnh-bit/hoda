@@ -346,19 +346,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return HodaAppBar(
       leadingWidth: 78,
       leading: _SalawatBadge(onTap: _openSalawat),
-      title: Padding(
-        // Nudge the brand group down a touch — the tall calligraphy ascends
-        // above the cap height of the icons and reads top-heavy otherwise.
-        padding: const EdgeInsets.only(top: 9),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const HodaLogo(size: 30),
-            const SizedBox(width: 8),
-            const HodaWordmark(height: 34),
-          ],
-        ),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const HodaLogo(size: 30),
+          const SizedBox(width: 8),
+          // Only the calligraphy is nudged down: its glyph mass sits high in
+          // the PNG frame, so at equal centering it reads top-heavy. The
+          // circular logo stays put with the row's natural centering.
+          const Padding(
+            padding: EdgeInsets.only(top: 9),
+            child: HodaWordmark(height: 34),
+          ),
+        ],
       ),
       actions: <Widget>[
         IconButton(

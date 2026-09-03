@@ -6,13 +6,9 @@ import '../services/theme_controller.dart';
 import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
 
-<<<<<<< HEAD
 /// App version shown at the bottom of this screen. Keep in sync with the
-/// `version:` field in pubspec.yaml (currently 0.1.6).
+/// `version:` field in pubspec.yaml (currently 0.1.7-beta).
 const String kHodaVersionFa = '۰.۱.۷ بتا';
-=======
-const String kHodaVersionFa = '۰.۱.۵';
->>>>>>> test/modern-ui-1
 
 /// Modern settings screen with clean card groups, streamlined notification
 /// management, and intuitive theme toggling.

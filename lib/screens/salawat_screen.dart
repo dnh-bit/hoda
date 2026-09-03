@@ -218,7 +218,7 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             InfoPill(
-                              label: 'اصلاح',
+                              label: 'اصلاح (−۱)',
                               icon: Icons.undo_rounded,
                               color: palette.muted,
                               onTap: tally.today == 0 && tally.total == 0

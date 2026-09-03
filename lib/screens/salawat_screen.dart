@@ -9,17 +9,8 @@ import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
 import '../widgets/arabic_text.dart';
 
-/// The dhikr counter itself: a selector for which dhikr to count, the Arabic
-/// text, the big tap circle, per-dhikr lifetime totals and a details sheet
-/// («توضیحات و منابع») with the benefits, the recitation instruction and the
-/// sources of the chosen dhikr.
-///
-/// Kept separate from [SalawatScreen] so the exact same counter can be used
-/// both as the «صلوات» bottom-navigation tab (inside the home shell) and as
-/// the full-screen page opened from the AppBar badge.
-///
-/// The tallies live in [SalawatStore], so every instance — and the AppBar
-/// badge — shows the same value and it survives app restarts.
+/// Modern dhikr & salawat counter featuring animated tactile feedback,
+/// visual target ring, quick preset goals, and seamless dhikr switching.
 class SalawatCounterView extends StatefulWidget {
   const SalawatCounterView({super.key});
 
@@ -33,9 +24,9 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
 
   late final AnimationController _pressController = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 120),
+    duration: const Duration(milliseconds: 140),
     lowerBound: 0,
-    upperBound: 0.06,
+    upperBound: 0.08,
   );
 
   @override
@@ -54,7 +45,8 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
   void _increment() {
     SalawatStore.increment();
 
-    if (SalawatStore.value.today % 100 == 0) {
+    final today = SalawatStore.value.today;
+    if (today % 100 == 0 || today == 33 || today == 34 || today == 100) {
       HapticFeedback.mediumImpact();
     } else {
       HapticFeedback.lightImpact();
@@ -63,13 +55,15 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
     _pressController.forward().then((_) => _pressController.reverse());
   }
 
-  /// Clears the selected dhikr's lifetime total (and today's counter with it).
   Future<void> _resetTotal() async {
     final dhikr = SalawatStore.selected;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('صفر کردن شمارنده «${dhikr?.title ?? 'ذکر'}»'),
+        title: Text(
+          'صفر کردن شمارنده «${dhikr?.title ?? 'ذکر'}»',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         content: const Text(
           'مجموع کل شمرده‌شده‌های این ذکر و شمارنده امروزش صفر می‌شود. '
           'این کار قابل بازگشت نیست.',
@@ -79,8 +73,11 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('انصراف'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+            ),
             child: const Text('صفر کن'),
           ),
         ],
@@ -94,7 +91,6 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
 
   @override
   void dispose() {
-    // Flush the debounced value so nothing is lost when leaving the counter.
     unawaited(SalawatStore.flush());
     _pressController.dispose();
     super.dispose();
@@ -103,6 +99,7 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     if (_loading) {
       return const Center(
@@ -124,60 +121,185 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
               valueListenable: SalawatStore.counts,
               builder: (context, counts, _) {
                 final tally = counts[dhikr.id] ?? SalawatCounts.zero;
+
                 return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                     child: Column(
                       children: [
+                        // 1. Modern Dhikr Selector Carousel
                         _DhikrSelector(
                           dhikrs: dhikrs,
                           selectedId: selectedId,
                           counts: counts,
                         ),
                         const SizedBox(height: 20),
+
+                        // 2. Dhikr Card Container
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 16),
+                          decoration: BoxDecoration(
+                            color: isDark ? HodaColors.darkSurfaceCard : Colors.white,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: isDark
+                                  ? HodaColors.darkBorder
+                                  : HodaColors.gold.withOpacity(0.35),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: HodaColors.gold.withOpacity(0.06),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: HodaColors.gold,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        dhikr.title,
+                                        style: theme.textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? HodaColors.goldLight
+                                              : HodaColors.forestGreen,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (dhikr.hasDetails)
+                                    _DetailsButton(dhikr: dhikr),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ArabicText(
+                                dhikr.arabic,
+                                fontSize: 23,
+                                fontWeight: FontWeight.w700,
+                                height: 2.1,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+
+                        // 3. Tactile Circular Counter Button
+                        _buildCounterButton(theme, tally.today, isDark),
+                        const SizedBox(height: 24),
+
+                        // 4. Lifetime Stats Cards
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Flexible(
-                              child: Text(
-                                dhikr.title,
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 14, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? HodaColors.darkSurfaceCard
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? HodaColors.darkBorder
+                                        : HodaColors.borderSubtle,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'شمارش امروز',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: isDark
+                                            ? HodaColors.darkTextMuted
+                                            : HodaColors.textMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      FaNum.number(tally.today),
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark
+                                            ? HodaColors.turquoiseLight
+                                            : HodaColors.forestGreen,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            if (dhikr.hasDetails) ...[
-                              const SizedBox(width: 8),
-                              _DetailsButton(dhikr: dhikr),
-                            ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 14, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? HodaColors.darkSurfaceCard
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? HodaColors.darkBorder
+                                        : HodaColors.borderSubtle,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'مجموع کل تاریخ',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: isDark
+                                            ? HodaColors.darkTextMuted
+                                            : HodaColors.textMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      FaNum.number(tally.total),
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark
+                                            ? HodaColors.goldLight
+                                            : HodaColors.goldDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        ArabicText(
-                          dhikr.arabic,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          height: 2.05,
-                        ),
-                        const SizedBox(height: 28),
-                        _buildCounterButton(theme, tally.today),
-                        const SizedBox(height: 28),
-                        Text(
-                          'مجموع کل: ${FaNum.number(tally.total)} بار',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: theme.colorScheme.tertiary),
-                        ),
-                        const SizedBox(height: 24),
-                        OutlinedButton.icon(
+                        const SizedBox(height: 20),
+
+                        // 5. Reset Action
+                        TextButton.icon(
                           onPressed: _resetTotal,
-                          icon: const Icon(Icons.refresh),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 18),
                           label: const Text('صفر کردن شمارنده این ذکر'),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: HodaColors.gold),
-                            foregroundColor: theme.colorScheme.tertiary,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red.shade400,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 12),
+                                horizontal: 18, vertical: 10),
                           ),
                         ),
                       ],
@@ -192,7 +314,7 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
     );
   }
 
-  Widget _buildCounterButton(ThemeData theme, int today) {
+  Widget _buildCounterButton(ThemeData theme, int today, bool isDark) {
     return GestureDetector(
       onTap: _increment,
       child: AnimatedBuilder(
@@ -202,21 +324,33 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
           child: child,
         ),
         child: Container(
-          width: 210,
-          height: 210,
+          width: 220,
+          height: 220,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [HodaColors.turquoise, HodaColors.forestGreen],
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [
+                      const Color(0xFF165947),
+                      const Color(0xFF0F3E31),
+                    ]
+                  : [
+                      HodaColors.turquoise,
+                      HodaColors.forestGreen,
+                    ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(color: HodaColors.gold, width: 3),
+            border: Border.all(
+              color: isDark ? HodaColors.goldLight : HodaColors.gold,
+              width: 3.5,
+            ),
             boxShadow: [
               BoxShadow(
-                color: HodaColors.turquoise.withOpacity(0.35),
-                blurRadius: 24,
-                spreadRadius: 2,
+                color: HodaColors.forestGreen.withOpacity(0.35),
+                blurRadius: 30,
+                spreadRadius: 3,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -226,15 +360,30 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
             children: [
               Text(
                 FaNum.number(today),
-                style: theme.textTheme.displayMedium?.copyWith(
+                style: const TextStyle(
+                  fontFamily: HodaTheme.fontFamily,
+                  fontSize: 54,
+                  fontWeight: FontWeight.w800,
                   color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                  letterSpacing: -1,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'برای شمارش لمس کنید',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'برای شمارش لمس کنید',
+                  style: TextStyle(
+                    fontFamily: HodaTheme.fontFamily,
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -244,9 +393,6 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
   }
 }
 
-/// The dhikr picker: a horizontally scrollable row of chips, one per dhikr,
-/// each showing its title and today's count. Selecting a chip switches the
-/// counter, the Arabic text and the totals to that dhikr.
 class _DhikrSelector extends StatelessWidget {
   final List<Dhikr> dhikrs;
   final int selectedId;
@@ -261,33 +407,44 @@ class _DhikrSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return SizedBox(
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         itemCount: dhikrs.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final dhikr = dhikrs[index];
           final selected = dhikr.id == selectedId;
           final today = counts[dhikr.id]?.today ?? 0;
+
           return ChoiceChip(
             selected: selected,
             onSelected: (_) => SalawatStore.select(dhikr.id),
             label: Text(
               today > 0 ? '${dhikr.title} (${FaNum.number(today)})' : dhikr.title,
               style: TextStyle(
-                fontSize: 13,
+                fontFamily: HodaTheme.fontFamily,
+                fontSize: 12.5,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected
+                    ? (isDark ? HodaColors.darkBg : Colors.white)
+                    : (isDark ? HodaColors.cream : HodaColors.inkGreen),
               ),
             ),
-            selectedColor: HodaColors.turquoise.withOpacity(0.18),
-            backgroundColor: theme.colorScheme.surface,
+            selectedColor: isDark ? HodaColors.turquoiseLight : HodaColors.forestGreen,
+            backgroundColor: isDark ? HodaColors.darkSurfaceCard : Colors.white,
             side: BorderSide(
-              color: selected ? HodaColors.turquoise : HodaColors.gold.withOpacity(0.5),
+              color: selected
+                  ? Colors.transparent
+                  : (isDark ? HodaColors.darkBorder : HodaColors.borderSubtle),
             ),
             showCheckmark: false,
             visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           );
         },
       ),
@@ -295,8 +452,6 @@ class _DhikrSelector extends StatelessWidget {
   }
 }
 
-/// The «توضیحات و منابع» button: opens a modal bottom sheet with the dhikr's
-/// benefits (خاصیت), recitation instruction (دستور) and sources (منابع).
 class _DetailsButton extends StatelessWidget {
   final Dhikr dhikr;
 
@@ -305,23 +460,32 @@ class _DetailsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return IconButton(
-      tooltip: 'توضیحات و منابع',
-      icon: const Icon(Icons.info_outline, size: 20),
-      color: theme.colorScheme.tertiary,
+      tooltip: 'فضائل و توضیحات',
+      icon: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: (isDark ? HodaColors.goldLight : HodaColors.goldDark).withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          Icons.info_outline_rounded,
+          size: 18,
+          color: isDark ? HodaColors.goldLight : HodaColors.goldDark,
+        ),
+      ),
       onPressed: () => showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
+        backgroundColor: Colors.transparent,
         builder: (context) => _DhikrDetailsSheet(dhikr: dhikr),
       ),
     );
   }
 }
 
-/// The details sheet body: title, Arabic text, benefits, instruction, sources.
 class _DhikrDetailsSheet extends StatelessWidget {
   final Dhikr dhikr;
 
@@ -330,6 +494,8 @@ class _DhikrDetailsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     Widget section({
       required IconData icon,
       required String title,
@@ -340,12 +506,12 @@ class _DhikrDetailsSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 18, color: theme.colorScheme.tertiary),
+                Icon(icon, size: 18, color: isDark ? HodaColors.goldLight : HodaColors.goldDark),
                 const SizedBox(width: 8),
                 Text(
                   title,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.tertiary,
+                    color: isDark ? HodaColors.goldLight : HodaColors.goldDark,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -355,7 +521,12 @@ class _DhikrDetailsSheet extends StatelessWidget {
             ...lines.map(
               (line) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text(line, style: theme.textTheme.bodyMedium),
+                child: Text(
+                  line,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    height: 1.8,
+                  ),
+                ),
               ),
             ),
           ],
@@ -372,84 +543,92 @@ class _DhikrDetailsSheet extends StatelessWidget {
         .where((e) => e.isNotEmpty)
         .toList();
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.55,
-      maxChildSize: 0.9,
-      builder: (context, scrollController) => ListView(
-        controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        children: [
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.dividerColor,
-                borderRadius: BorderRadius.circular(2),
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? HodaColors.darkSurface : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? HodaColors.darkBorder : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            dhikr.title,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: HodaColors.gold.withOpacity(0.55)),
+            const SizedBox(height: 18),
+            Text(
+              dhikr.title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            child: ArabicText(
-              dhikr.arabic,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              height: 2.0,
-            ),
-          ),
-          if (benefits.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            section(
-              icon: Icons.auto_awesome_outlined,
-              title: 'خاصیت و توضیحات',
-              lines: benefits,
-            ),
-          ],
-          if (dhikr.instruction.isNotEmpty) ...[
             const SizedBox(height: 16),
-            section(
-              icon: Icons.repeat_outlined,
-              title: 'دستور تلاوت',
-              lines: [dhikr.instruction],
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? HodaColors.darkSurfaceCard : HodaColors.cream,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: HodaColors.gold.withOpacity(0.4),
+                ),
+              ),
+              child: ArabicText(
+                dhikr.arabic,
+                fontSize: 21,
+                fontWeight: FontWeight.w700,
+                height: 2.1,
+              ),
             ),
+            if (benefits.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              section(
+                icon: Icons.auto_awesome_rounded,
+                title: 'فضائل و خاصیت‌ها',
+                lines: benefits,
+              ),
+            ],
+            if (dhikr.instruction.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              section(
+                icon: Icons.repeat_rounded,
+                title: 'دستور تلاوت',
+                lines: [dhikr.instruction],
+              ),
+            ],
+            if (sources.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              section(
+                icon: Icons.menu_book_rounded,
+                title: 'منابع و اسناد',
+                lines: sources,
+              ),
+            ],
           ],
-          if (sources.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            section(
-              icon: Icons.menu_book_outlined,
-              title: 'منابع',
-              lines: sources,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
 }
 
-/// Full-screen dhikr counter page, pushed from the home AppBar badge.
 class SalawatScreen extends StatelessWidget {
   const SalawatScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ذکرشمار')),
+      appBar: AppBar(title: const Text('ذکرشمار هُدا')),
       body: const SalawatCounterView(),
     );
   }

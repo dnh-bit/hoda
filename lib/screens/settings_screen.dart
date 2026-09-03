@@ -6,12 +6,10 @@ import '../services/theme_controller.dart';
 import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
 
-/// App version shown at the bottom of this screen. Keep in sync with the
-/// `version:` field in pubspec.yaml (currently 0.1.6).
-const String kHodaVersionFa = '۰.۱.۶';
+const String kHodaVersionFa = '۰.۱.۵';
 
-/// Settings: theme, and the multi-schedule notification manager (up to five
-/// daily notifications, each with its own time and content type).
+/// Modern settings screen with clean card groups, streamlined notification
+/// management, and intuitive theme toggling.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -56,7 +54,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _status = status;
         _master = status['masterEnabled'] == true;
       });
-      // Reload the local list so sort order/cap always mirrors the store.
       final schedules = await NotificationService.schedules();
       if (!mounted) return;
       setState(() => _schedules = schedules);
@@ -67,9 +64,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool get _capReached => _schedules.length >= NotificationSchedule.maxCount;
 
-  /// Two ENABLED schedules sharing the same wall-clock minute is almost
-  /// always a mistake — surface it before the user wonders why two notes
-  /// arrive together.
   String? get _duplicateWarning {
     final seen = <int, NotificationSchedule>{};
     for (final s in _schedules) {
@@ -86,169 +80,265 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CircularProgressIndicator(color: HodaColors.turquoise)),
       );
     }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('تنظیمات')),
+      appBar: AppBar(title: const Text('تنظیمات برنامه')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
+        physics: const BouncingScrollPhysics(),
         children: [
-          _sectionTitle(theme, Icons.notifications_active_outlined,
-              'اعلان‌های روزانه'),
+          // 1. Appearance / Theme Section
+          _buildSectionHeader('ظاهر و پوسته', Icons.palette_outlined, isDark),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? HodaColors.darkSurfaceCard : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? HodaColors.darkBorder : HodaColors.borderSubtle,
+              ),
+            ),
+            child: ValueListenableBuilder<ThemeMode>(
+              valueListenable: ThemeController.mode,
+              builder: (context, mode, _) {
+                final isDarkMode = mode == ThemeMode.dark;
+                return SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                  title: const Text(
+                    'حالت شب (تم تاریک)',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    isDarkMode ? 'پوسته زمردی تیره فعال است' : 'پوسته کرم و سبز روشن فعال است',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+                    ),
+                  ),
+                  secondary: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: (isDarkMode ? HodaColors.goldLight : HodaColors.forestGreen).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                      color: isDarkMode ? HodaColors.goldLight : HodaColors.forestGreen,
+                      size: 20,
+                    ),
+                  ),
+                  value: isDarkMode,
+                  activeColor: HodaColors.turquoise,
+                  onChanged: (_) => ThemeController.toggle(),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 2. Daily Notifications Section
+          _buildSectionHeader('اعلان‌های یادآور روزانه', Icons.notifications_active_outlined, isDark),
+          const SizedBox(height: 10),
           _MasterSwitch(
             master: _master,
             busy: _busy,
             status: _status,
             onChanged: (v) => _apply(NotificationService.setMasterEnabled(v)),
           ),
-          if (!_master) ...[
-            const SizedBox(height: 8),
-            Text(
-              'برای مدیریت اعلان‌ها، ابتدا کلید اصلی را روشن کنید.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.tertiary),
-            ),
-          ],
+
           if (_duplicateWarning != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _WarningBanner(message: _duplicateWarning!),
           ],
+
           const SizedBox(height: 12),
-          ..._schedules.map(_buildScheduleCard),
+          ..._schedules.map((s) => _buildScheduleCard(s, isDark)),
+
           if (!_capReached)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: 6),
               child: OutlinedButton.icon(
                 onPressed: _busy ? null : _addSchedule,
-                icon: const Icon(Icons.add_alarm),
-                label: const Text('افزودن اعلان جدید'),
+                icon: const Icon(Icons.add_alarm_rounded, size: 18),
+                label: const Text('افزودن زمان‌بندی جدید'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark ? HodaColors.turquoiseLight : HodaColors.forestGreen,
+                  side: BorderSide(
+                    color: isDark ? HodaColors.turquoiseLight : HodaColors.forestGreen,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
               ),
             )
           else
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: 6),
               child: Text(
                 'حداکثر ${FaNum.number(NotificationSchedule.maxCount)} اعلان '
-                'روزانه می‌توانید داشته باشید. برای اعلان جدید، یکی را حذف کنید.',
+                'روزانه فعال است.',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.tertiary),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+                ),
               ),
             ),
-          const SizedBox(height: 12),
+
+          const SizedBox(height: 16),
           _StatusCard(status: _status),
+
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.only(top: 10),
             child: OutlinedButton.icon(
-              onPressed:
-                  _busy || !_master ? null : () => _testNotification(context),
-              icon: const Icon(Icons.notifications_none),
-              label: const Text('اعلان تستی'),
+              onPressed: _busy || !_master ? null : () => _testNotification(context),
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: const Text('ارسال اعلان آزمایشی'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isDark ? HodaColors.goldLight : HodaColors.goldDark,
+                side: BorderSide(
+                  color: (isDark ? HodaColors.goldLight : HodaColors.goldDark).withOpacity(0.5),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
             ),
           ),
-          const Divider(height: 40),
-          _sectionTitle(theme, Icons.dark_mode_outlined, 'نمایش'),
-          ValueListenableBuilder<ThemeMode>(
-            valueListenable: ThemeController.mode,
-            builder: (context, mode, _) {
-              final isDark = mode == ThemeMode.dark;
-              return SwitchListTile(
-                title: const Text('حالت شب'),
-                subtitle: Text(isDark ? 'تم تاریک فعال است' : 'تم روشن فعال است'),
-                secondary: Icon(
-                  isDark ? Icons.dark_mode : Icons.light_mode,
-                  color: theme.colorScheme.tertiary,
-                ),
-                value: isDark,
-                onChanged: (_) => ThemeController.toggle(),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 36),
+
+          // App Footer
           Center(
-            child: Text('نسخه $kHodaVersionFa - هُدا',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: Colors.grey, fontSize: 12)),
+            child: Column(
+              children: [
+                Text(
+                  'اپلیکیشن معنوی هُدا',
+                  style: TextStyle(
+                    fontFamily: HodaTheme.displayFontFamily,
+                    fontSize: 18,
+                    color: isDark ? HodaColors.goldLight : HodaColors.forestGreen,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'نسخه $kHodaVersionFa • طراحی شده با عشق و اخلاص',
+                  style: TextStyle(
+                    fontFamily: HodaTheme.fontFamily,
+                    fontSize: 11.5,
+                    color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
         ],
       ),
     );
   }
 
-  Widget _sectionTitle(ThemeData theme, IconData icon, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.tertiary),
-          const SizedBox(width: 8),
-          Text(title,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-        ],
-      ),
+  Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 19,
+          color: isDark ? HodaColors.turquoiseLight : HodaColors.forestGreen,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: HodaTheme.fontFamily,
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+            color: isDark ? HodaColors.cream : HodaColors.inkGreen,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildScheduleCard(NotificationSchedule schedule) {
-    final theme = Theme.of(context);
+  Widget _buildScheduleCard(NotificationSchedule schedule, bool isDark) {
     final active = _master && schedule.enabled;
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: active ? HodaColors.turquoise : Colors.grey.shade400,
-          width: 1.2,
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      decoration: BoxDecoration(
+        color: isDark ? HodaColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: active
+              ? (isDark ? HodaColors.turquoiseLight : HodaColors.turquoise)
+              : (isDark ? HodaColors.darkBorder : HodaColors.borderSubtle),
+          width: active ? 1.4 : 1,
         ),
       ),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Icon(
-          active ? Icons.notifications_active : Icons.notifications_off,
-          color: active ? HodaColors.turquoise : Colors.grey,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: (active ? HodaColors.turquoise : Colors.grey).withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            active ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+            color: active ? HodaColors.turquoise : Colors.grey,
+            size: 20,
+          ),
         ),
         title: Text(
           '${schedule.timeLabelFa} • ${schedule.typeLabelFa}',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: active ? null : Colors.grey,
+          style: TextStyle(
+            fontFamily: HodaTheme.fontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: active
+                ? (isDark ? HodaColors.cream : HodaColors.inkGreen)
+                : Colors.grey,
           ),
         ),
         subtitle: Text(
-          active
-              ? 'فعال — هر روز در ساعت ${schedule.timeLabelFa}'
-              : 'غیرفعال',
-          style: theme.textTheme.bodySmall,
+          active ? 'فعال — دریافت روزانه در این ساعت' : 'غیرفعال',
+          style: TextStyle(
+            fontFamily: HodaTheme.fontFamily,
+            fontSize: 11,
+            color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+          ),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               tooltip: 'پیش‌نمایش',
-              icon: const Icon(Icons.play_circle_outline),
+              icon: const Icon(Icons.play_arrow_rounded),
               onPressed: _busy
                   ? null
                   : () async {
-                      final ok =
-                          await NotificationService.showPreview(schedule);
+                      final ok = await NotificationService.showPreview(schedule);
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(ok
-                              ? 'پیش‌نمایش ارسال شد 🌿'
-                              : 'پیش‌نمایش ارسال نشد؛ دسترسی اعلان را بررسی کنید.'),
+                              ? 'پیش‌نمایش اعلان ارسال شد'
+                              : 'پیش‌نمایش ارسال نشد؛ دسترسی اعلان‌ها بررسی شود.'),
+                          behavior: SnackBarBehavior.floating,
                         ),
                       );
                     },
             ),
             Switch(
               value: schedule.enabled,
+              activeColor: HodaColors.turquoise,
               onChanged: _busy
                   ? null
                   : (v) => _apply(NotificationService.upsert(
@@ -263,11 +353,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _addSchedule() async {
-    // Find the lowest free slot id so notification ids stay stable.
     final used = _schedules.map((s) => s.id).toSet();
     var free = 0;
-    while (used.contains(free) &&
-        free < NotificationSchedule.maxCount) {
+    while (used.contains(free) && free < NotificationSchedule.maxCount) {
       free++;
     }
     final schedule = NotificationSchedule(id: free);
@@ -290,7 +378,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result.enabled) {
       await _apply(NotificationService.upsert(result));
     } else if (!isNew) {
-      // Delete was chosen inside the editor.
       await _apply(NotificationService.remove(schedule.id));
     }
   }
@@ -303,14 +390,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok
-            ? 'اعلان تستی ارسال شد 🌿'
-            : 'ارسال نشد؛ دسترسی اعلان را بررسی کنید.'),
+            ? 'اعلان تستی با موفقیت ارسال شد 🌿'
+            : 'ارسال نشد؛ لطفاً مجوز دسترسی اعلان را چک کنید.'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 }
 
-/// Master on/off for the whole notification system.
 class _MasterSwitch extends StatelessWidget {
   final bool master;
   final bool busy;
@@ -327,40 +414,79 @@ class _MasterSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: master ? HodaColors.gold : Colors.grey.shade400,
-          width: 1.2,
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? HodaColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: master
+              ? (isDark ? HodaColors.goldLight : HodaColors.gold)
+              : (isDark ? HodaColors.darkBorder : HodaColors.borderSubtle),
+          width: master ? 1.4 : 1,
         ),
       ),
       child: Column(
         children: [
           SwitchListTile(
-            title: const Text('کلید اصلی اعلان‌ها'),
-            subtitle: Text(master ? 'فعال' : 'غیرفعال'),
-            secondary: Icon(
-              master ? Icons.notifications_active : Icons.notifications_off,
-              color: master ? HodaColors.gold : Colors.grey,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+            title: const Text(
+              'کلید اصلی اعلان‌ها',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text(
+              master ? 'سیستم اعلان‌ها روشن است' : 'همه یادآورها خاموش هستند',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+              ),
+            ),
+            secondary: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: (master ? HodaColors.gold : Colors.grey).withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                master ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+                color: master ? (isDark ? HodaColors.goldLight : HodaColors.goldDark) : Colors.grey,
+                size: 20,
+              ),
             ),
             value: master,
+            activeColor: HodaColors.gold,
             onChanged: busy ? null : onChanged,
           ),
           if (status != null && status!['notificationsAllowed'] == false)
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.warning_amber_rounded,
-                  color: HodaColors.gold),
-              title: Text(
-                'دسترسی اعلان در سیستم داده نشده است. برای فعال‌سازی، از تنظیمات '
-                'گوشی اجازه بدهید.',
-                style: theme.textTheme.bodySmall,
-              ),
-              trailing: TextButton(
-                onPressed: NotificationService.openSystemSettings,
-                child: const Text('تنظیمات'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'دسترسی اعلان در گوشی داده نشده است.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: NotificationService.openSystemSettings,
+                      child: const Text('تنظیمات دستگاه'),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -369,27 +495,28 @@ class _MasterSwitch extends StatelessWidget {
   }
 }
 
-/// Inline duplicate-time warning.
 class _WarningBanner extends StatelessWidget {
   final String message;
   const _WarningBanner({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: HodaColors.gold.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: HodaColors.gold.withOpacity(0.5)),
+        color: Colors.amber.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.amber.withOpacity(0.5)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: HodaColors.gold, size: 20),
+          const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 20),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(message, style: theme.textTheme.bodySmall),
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -397,8 +524,6 @@ class _WarningBanner extends StatelessWidget {
   }
 }
 
-/// Shows what is actually armed: one row per active schedule with its next
-/// fire time, plus the global mode (exact/inexact) and timezone.
 class _StatusCard extends StatelessWidget {
   final Map<String, dynamic>? status;
   const _StatusCard({required this.status});
@@ -406,98 +531,87 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (status == null) return const SizedBox.shrink();
     final s = status!;
-    final reports =
-        (s['schedules'] as List?)?.cast<Map<String, dynamic>>() ??
-            <Map<String, dynamic>>[];
-    final activeReports =
-        reports.where((r) => r['active'] == true).toList();
-    return Card(
-      margin: EdgeInsets.zero,
-      color: theme.colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: HodaColors.turquoise.withOpacity(0.4)),
+    final reports = (s['schedules'] as List?)?.cast<Map<String, dynamic>>() ?? <Map<String, dynamic>>[];
+    final activeReports = reports.where((r) => r['active'] == true).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? HodaColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? HodaColors.darkBorder : HodaColors.borderSubtle,
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.verified_outlined,
-                    color: HodaColors.turquoise, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('وضعیت اعلان‌ها',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(s['summaryFa']?.toString() ?? '—',
-                style: theme.textTheme.bodySmall),
-            if (activeReports.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              ...activeReports.map(
-                (r) => Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.schedule,
-                          size: 14, color: HodaColors.turquoise),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '${r['typeLabelFa']} • ${r['time']}'
-                          '${r['armed'] == true ? '' : ' (در انتظار ثبت)'}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      Text(
-                        r['nextFireLabel']?.toString() ?? '—',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.tertiary),
-                      ),
-                    ],
-                  ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: isDark ? HodaColors.turquoiseLight : HodaColors.turquoise,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'وضعیت زمان‌بندی‌ها',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
-            if (s['mode'] == 'inexact')
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            s['summaryFa']?.toString() ?? '—',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+            ),
+          ),
+          if (activeReports.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...activeReports.map(
+              (r) => Padding(
+                padding: const EdgeInsets.only(top: 4),
                 child: Row(
                   children: [
-                    const Icon(Icons.alarm,
-                        size: 16, color: HodaColors.gold),
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: isDark ? HodaColors.turquoiseLight : HodaColors.turquoise,
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'زنگ دقیق در سیستم فعال نیست؛ اعلان‌ها ممکن است چند '
-                        'دقیقه جابه‌جا شوند.',
-                        style: theme.textTheme.bodySmall,
+                        '${r['typeLabelFa']} • ${r['time']}',
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
-                    TextButton(
-                      onPressed: NotificationService.openSystemSettings,
-                      child: const Text('رفتن به تنظیمات'),
+                    Text(
+                      r['nextFireLabel']?.toString() ?? '—',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? HodaColors.goldLight : HodaColors.goldDark,
+                      ),
                     ),
                   ],
                 ),
               ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-/// Bottom-sheet editor for one schedule: type chips, time picker, delete.
-/// Returns the edited schedule (enabled=false means «delete» from this flow).
 class _ScheduleEditor extends StatefulWidget {
   final NotificationSchedule initial;
   final bool isNew;
@@ -513,84 +627,119 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.isNew ? 'اعلان جدید' : 'ویرایش اعلان',
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final type in NotificationSchedule.types)
-                  ChoiceChip(
-                    label: Text(NotificationSchedule.labelForType(type)),
-                    selected: _draft.type == type,
-                    onSelected: (_) =>
-                        setState(() => _draft = _draft.copyWith(type: type)),
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? HodaColors.darkSurface : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? HodaColors.darkBorder : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.access_time,
-                  color: HodaColors.turquoise),
-              title: const Text('ساعت اعلان'),
-              trailing: Text(_draft.timeLabelFa,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: _draft.time,
-                );
-                if (picked != null) {
-                  setState(() => _draft = _draft.copyWith(
-                        hour: picked.hour,
-                        minute: picked.minute,
-                      ));
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                if (!widget.isNew)
-                  TextButton.icon(
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.isNew ? 'افزودن اعلان روزانه' : 'ویرایش اعلان',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'نوع محتوای ارسالی:',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final type in NotificationSchedule.types)
+                    ChoiceChip(
+                      label: Text(NotificationSchedule.labelForType(type)),
+                      selected: _draft.type == type,
+                      selectedColor: isDark ? HodaColors.turquoiseLight : HodaColors.forestGreen,
+                      onSelected: (_) =>
+                          setState(() => _draft = _draft.copyWith(type: type)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.access_time_rounded, color: HodaColors.turquoise),
+                title: const Text('ساعت ارسال اعلان'),
+                trailing: Text(
+                  _draft.timeLabelFa,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? HodaColors.goldLight : HodaColors.forestGreen,
+                  ),
+                ),
+                onTap: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: _draft.time,
+                  );
+                  if (picked != null) {
+                    setState(() => _draft = _draft.copyWith(
+                          hour: picked.hour,
+                          minute: picked.minute,
+                        ));
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  if (!widget.isNew)
+                    TextButton.icon(
+                      onPressed: () =>
+                          Navigator.of(context).pop(_draft.copyWith(enabled: false)),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: const Text('حذف'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('انصراف'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
                     onPressed: () =>
-                        Navigator.of(context).pop(_draft.copyWith(enabled: false)),
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('حذف'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        Navigator.of(context).pop(_draft.copyWith(enabled: true)),
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: const Text('ذخیره تغییرات'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: HodaColors.forestGreen,
+                    ),
                   ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('انصراف'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_draft.copyWith(enabled: true)),
-                  icon: const Icon(Icons.check),
-                  label: const Text('ذخیره'),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

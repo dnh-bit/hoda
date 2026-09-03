@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../models/daily_content.dart';
+import '../theme/hoda_theme.dart';
 import 'arabic_text.dart';
 
-/// Standard card used for every piece of content (verse, hadith, martyr will,
-/// Nahj wisdom). Arabic and Persian bodies are styled separately.
+/// Modern card component for displaying Quranic verses, Hadiths, Nahj wisdoms,
+/// and martyr wills with polished islamic aesthetics.
 class ContentCard extends StatelessWidget {
   final DailyContent content;
   final Color borderColor;
@@ -17,6 +18,9 @@ class ContentCard extends StatelessWidget {
   /// When set, the Arabic body is clipped to this many lines (list previews).
   final int? maxArabicLines;
 
+  /// Optional badge/tag label to display in the header (e.g. 'آیه روز', 'حکمت').
+  final String? categoryBadge;
+
   const ContentCard({
     super.key,
     required this.content,
@@ -25,269 +29,206 @@ class ContentCard extends StatelessWidget {
     this.onTap,
     this.maxPersianLines,
     this.maxArabicLines,
+    this.categoryBadge,
   });
-
-  // ───────────────────────── design tokens ─────────────────────────
-  /// Card corner radius. Inner blocks step down by 2–4 for optical nesting.
-  static const double _radius = 16;
-  static const double _innerRadius = 13;
-  static const EdgeInsets _cardMargin =
-      EdgeInsets.symmetric(horizontal: 4, vertical: 7);
-  static const EdgeInsets _contentPadding = EdgeInsets.fromLTRB(20, 18, 20, 20);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final radius = BorderRadius.circular(_radius);
 
-    // The card surface picks up a whisper of the accent so each content type
-    // feels tinted without ever looking coloured.
-    final surface = Color.alphaBlend(
-      borderColor.withOpacity(isDark ? 0.07 : 0.022),
-      theme.cardColor,
-    );
+    final cardBg = isDark ? HodaColors.darkSurfaceCard : Colors.white;
+    final accent = borderColor;
 
-    return Semantics(
-      button: onTap != null,
-      child: Container(
-        margin: _cardMargin,
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          boxShadow: [
-            // Wide, accent-tinted ambient glow — this carries the elevation.
-            BoxShadow(
-              color: borderColor.withOpacity(isDark ? 0.22 : 0.11),
-              blurRadius: 24,
-              spreadRadius: -4,
-              offset: const Offset(0, 10),
-            ),
-            // Tight neutral contact shadow keeps the card grounded.
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.30 : 0.05),
-              blurRadius: 5,
-              spreadRadius: -1,
-              offset: const Offset(0, 2),
-            ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? HodaColors.darkBorder : accent.withOpacity(0.22),
+          width: 1.2,
         ),
-        child: Material(
-          color: surface,
-          clipBehavior: Clip.antiAlias,
-          borderRadius: radius,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: radius,
-            splashColor: borderColor.withOpacity(0.07),
-            highlightColor: borderColor.withOpacity(0.04),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                // Hairline border instead of the old heavy 1.6px stroke.
-                border: Border.all(
-                  color: borderColor.withOpacity(isDark ? 0.30 : 0.15),
-                  width: 1,
-                ),
-                // Soft top-down sheen for a lit, glassy surface.
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    borderColor.withOpacity(isDark ? 0.07 : 0.035),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildAccentBar(),
-                  Padding(
-                    padding: _contentPadding,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(theme, isDark),
-                        if (content.hasArabic) ...[
-                          const SizedBox(height: 16),
-                          _buildArabicBlock(isDark),
-                        ],
-                        if (content.hasArabic && content.hasPersian) ...[
-                          const SizedBox(height: 18),
-                          _buildDivider(),
-                          const SizedBox(height: 6),
-                        ],
-                        if (content.hasPersian) ...[
-                          const SizedBox(height: 10),
-                          _buildPersian(theme),
-                        ],
-                        if (content.hasSource) ...[
-                          const SizedBox(height: 18),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: _buildSource(theme, isDark),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.25)
+                : accent.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          splashColor: accent.withOpacity(0.08),
+          highlightColor: accent.withOpacity(0.04),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top Header Row
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Icon(icon, color: accent, size: 19),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (categoryBadge != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text(
+                                categoryBadge!,
+                                style: TextStyle(
+                                  fontFamily: HodaTheme.fontFamily,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: accent,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          Text(
+                            content.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? HodaColors.cream : HodaColors.deepGreen,
+                            ),
                           ),
                         ],
-                      ],
+                      ),
+                    ),
+                    if (onTap != null)
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.05)
+                              : HodaColors.surfaceMuted,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 13,
+                          color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+
+                // Arabic Script Banner
+                if (content.hasArabic) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? HodaColors.darkSurface
+                          : HodaColors.cream.withOpacity(0.65),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark
+                            ? HodaColors.darkBorder
+                            : HodaColors.borderSubtle.withOpacity(0.7),
+                      ),
+                    ),
+                    child: ArabicText(
+                      content.arabic,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w600,
+                      maxLines: maxArabicLines,
                     ),
                   ),
                 ],
-              ),
+
+                // Divider or Spacing
+                if (content.hasArabic && content.hasPersian)
+                  const SizedBox(height: 12)
+                else if (content.hasPersian)
+                  const SizedBox(height: 10),
+
+                // Persian Translation / Text
+                if (content.hasPersian)
+                  Text(
+                    content.persian,
+                    textAlign: TextAlign.justify,
+                    maxLines: maxPersianLines,
+                    overflow:
+                        maxPersianLines == null ? null : TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      height: 1.85,
+                      color: isDark ? HodaColors.cream.withOpacity(0.9) : HodaColors.inkGreen,
+                    ),
+                  ),
+
+                // Bottom Source / Meta Bar
+                if (content.hasSource || (content.family != null && content.family!.isNotEmpty)) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (content.family != null && content.family!.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: accent.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            content.family!,
+                            style: TextStyle(
+                              fontFamily: HodaTheme.fontFamily,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: accent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      const Spacer(),
+                      if (content.hasSource)
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            content.source,
+                            textAlign: TextAlign.left,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: isDark ? HodaColors.goldLight : HodaColors.goldDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  /// Slim accent ribbon along the top edge — identifies the content type.
-  Widget _buildAccentBar() {
-    return Container(
-      height: 3,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            borderColor.withOpacity(0.85),
-            borderColor.withOpacity(0.45),
-            borderColor.withOpacity(0.12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Badge + title + affordance chevron.
-  Widget _buildHeader(ThemeData theme, bool isDark) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(
-            color: borderColor.withOpacity(isDark ? 0.20 : 0.10),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor.withOpacity(0.18)),
-          ),
-          child: Icon(icon, color: borderColor, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            content.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: borderColor,
-              letterSpacing: 0.1,
-              height: 1.25,
-            ),
-          ),
-        ),
-        if (onTap != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: borderColor.withOpacity(isDark ? 0.18 : 0.08),
-            ),
-            child: Icon(Icons.arrow_forward_ios, size: 11, color: borderColor),
-          ),
-        ],
-      ],
-    );
-  }
-
-  /// Arabic body sits in its own tinted, softly bordered well so the sacred
-  /// text reads as the visual anchor of the card.
-  Widget _buildArabicBlock(bool isDark) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(_innerRadius),
-        border: Border.all(color: borderColor.withOpacity(isDark ? 0.22 : 0.12)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            borderColor.withOpacity(isDark ? 0.14 : 0.075),
-            borderColor.withOpacity(isDark ? 0.06 : 0.025),
-          ],
-        ),
-      ),
-      child: ArabicText(
-        content.arabic,
-        fontWeight: FontWeight.w600,
-        maxLines: maxArabicLines,
-      ),
-    );
-  }
-
-  /// Feathered hairline that fades at both ends — softer than a full Divider.
-  Widget _buildDivider() {
-    return Container(
-      height: 1,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            borderColor.withOpacity(0.0),
-            borderColor.withOpacity(0.35),
-            borderColor.withOpacity(0.0),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Persian translation: generous line height for comfortable RTL reading.
-  Widget _buildPersian(ThemeData theme) {
-    return Text(
-      content.persian,
-      textAlign: TextAlign.center,
-      maxLines: maxPersianLines,
-      overflow: maxPersianLines == null ? null : TextOverflow.ellipsis,
-      style: theme.textTheme.bodyLarge?.copyWith(
-        height: 1.9,
-        letterSpacing: 0.15,
-        fontWeight: FontWeight.w500,
-        color: theme.colorScheme.onSurface.withOpacity(0.86),
-      ),
-    );
-  }
-
-  /// Attribution rendered as a quiet pill so it never competes with the body.
-  Widget _buildSource(ThemeData theme, bool isDark) {
-    final tertiary = theme.colorScheme.tertiary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-      decoration: BoxDecoration(
-        color: tertiary.withOpacity(isDark ? 0.16 : 0.075),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: tertiary.withOpacity(0.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.auto_stories_rounded, size: 13, color: tertiary),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              content.source,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: tertiary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-                height: 1.2,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

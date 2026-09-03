@@ -3,19 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/hoda_theme.dart';
 
 /// Renders Arabic scripture (Quran, hadith, Nahj al-Balagha, adhkar) with a
-/// proper Naskh face and RTL-safe typography.
-///
-/// Why this widget exists: Arabic scripture used to inherit the Persian UI
-/// text theme (Vazirmatn, line height ~1.7, no explicit text direction).
-/// Vazirmatn is a Latin/Persian sans face, so vocalised Quranic text came out
-/// cramped, with clipped tashkeel and wrong-looking joins, and lines that
-/// start with punctuation or digits could flip to LTR. Arabic text must
-/// therefore always be rendered through this widget:
-/// * [HodaTheme.arabicFontFamily] (Amiri, a Naskh face with full Quranic
-///   mark coverage) with Vazirmatn as a fallback,
-/// * `textDirection: TextDirection.rtl`,
-/// * generous line height (1.8–2.1) so tashkeel is never clipped,
-/// * `letterSpacing: 0`, which is mandatory for cursive Arabic joins.
+/// proper Naskh face (Amiri) and RTL-safe typography.
 class ArabicText extends StatelessWidget {
   const ArabicText(
     this.text, {
@@ -39,8 +27,8 @@ class ArabicText extends StatelessWidget {
   final TextOverflow? overflow;
 
   /// Comfortable reading height for vocalised Arabic.
-  static const double defaultHeight = 1.95;
-  static const double defaultFontSize = 22;
+  static const double defaultHeight = 2.05;
+  static const double defaultFontSize = 21;
 
   /// Arabic text style, reusable outside of this widget (spans, rich text...).
   static TextStyle style(
@@ -51,16 +39,17 @@ class ArabicText extends StatelessWidget {
     double? height,
   }) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return TextStyle(
       fontFamily: HodaTheme.arabicFontFamily,
       fontFamilyFallback: HodaTheme.arabicFontFallback,
       fontSize: fontSize ?? defaultFontSize,
-      fontWeight: fontWeight ?? FontWeight.w400,
-      color: color ?? theme.textTheme.titleLarge?.color,
+      fontWeight: fontWeight ?? FontWeight.w600,
+      color: color ?? (isDark ? HodaColors.goldLight : HodaColors.deepGreen),
       height: height ?? defaultHeight,
       // Cursive Arabic breaks apart with any letter spacing.
       letterSpacing: 0,
-      wordSpacing: 1.5,
+      wordSpacing: 1.8,
       leadingDistribution: TextLeadingDistribution.even,
     );
   }
@@ -90,7 +79,7 @@ class ArabicText extends StatelessWidget {
         fontFamily: HodaTheme.arabicFontFamily,
         fontSize: effectiveStyle.fontSize,
         height: effectiveStyle.height,
-        leading: 0.2,
+        leading: 0.25,
         forceStrutHeight: false,
       ),
     );

@@ -1,0 +1,49 @@
+name: Build Test APK
+
+# Builds a test APK from a pushed branch WITHOUT creating a release or tag.
+# Used to pre-build user UI samples for in-chat review; artifacts are private
+# (visible only to repo collaborators) and expire on their own.
+
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Decode signing key
+        env:
+          HODA_UPLOAD_KEYSTORE_B64: ${{ secrets.HODA_UPLOAD_KEYSTORE_B64 }}
+          HODA_KEYSTORE_PASSWORD: ${{ secrets.HODA_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$HODA_UPLOAD_KEYSTORE_B64" | base64 --decode > android/app/hoda-upload.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=hodaUpload\nstoreFile=hoda-upload.jks\n' \
+            "$HODA_KEYSTORE_PASSWORD" "$HODA_KEYSTORE_PASSWORD" > android/key.properties
+
+      - name: Build APK (release, signed)
+        run: flutter build apk --release
+
+      - name: Upload test artifact (no release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoda-test-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7

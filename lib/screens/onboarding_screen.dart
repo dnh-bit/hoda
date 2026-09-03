@@ -5,72 +5,60 @@ import '../services/notification_service.dart';
 import '../theme/hoda_theme.dart';
 import '../widgets/hoda_logo.dart';
 
-/// First-run onboarding: three swipeable slides introducing the app, the daily
-/// notifications (with an inline activation button) and the dhikr counter.
-///
-/// Shown exactly once — the [kOnboardingDoneKey] preference is written when the
-/// user finishes (or skips) it. App updates never re-show it.
+const String kOnboardingDoneKey = 'hoda_onboarding_done_v1';
+
+/// Modern onboarding walkthrough with engaging typography, visual illustrations,
+/// and smooth page indicators.
 class OnboardingScreen extends StatefulWidget {
-  /// Called when the user finishes or skips, so the shell can replace this
-  /// screen with the real app.
   final VoidCallback onDone;
 
   const OnboardingScreen({super.key, required this.onDone});
 
-  /// Whether onboarding still needs to run (first launch only).
   static Future<bool> shouldShow() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       return !(prefs.getBool(kOnboardingDoneKey) ?? false);
     } catch (_) {
-      return false; // Never block the app for a preference read.
+      return false;
     }
   }
 
-  /// Marks onboarding as finished so it never shows again.
   static Future<void> markDone() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(kOnboardingDoneKey, true);
-    } catch (_) {
-      // Best-effort: worst case the slides show once more next launch.
-    }
+    } catch (_) {}
   }
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-/// Preference key under which «onboarding finished» is stored.
-const String kOnboardingDoneKey = 'hoda_onboarding_done_v1';
-
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int _page = 0;
-
   bool _enabling = false;
   bool? _enableResult;
 
   static const List<_Slide> _slides = [
     _Slide(
-      icon: Icons.auto_stories,
+      icon: Icons.auto_stories_rounded,
       title: 'به هُدا خوش آمدید',
-      body: 'گنجینه‌ای از آیات قرآن، احادیث چهارده معصوم (ع)، وصایای شهدا و '
-          'حکمت‌های نهج‌البلاغه — همیشه در جیب شما، بدون نیاز به اینترنت.',
+      body: 'همراه معنوی روزانه شما؛ گنجینه‌ای از آیات قرآن، احادیث معصومین (ع)، '
+          'حکمت‌های نهج‌البلاغه و وصایای شهدا — کاملاً آفلاین و در دسترس شما.',
     ),
     _Slide(
-      icon: Icons.notifications_active_outlined,
-      title: 'اعلان‌های روزانه',
-      body: 'هر روز چهار پیام معنوی دریافت کنید: آیه صبحگاهی ۷:۰۰، حدیث ۱۰:۰۰، '
-          'حکمت ۱۳:۰۰ و وصیت شهید ۱۶:۰۰. بعداً می‌توانید ساعت‌ها را در '
-          'تنظیمات تغییر دهید.',
+      icon: Icons.notifications_active_rounded,
+      title: 'یادآور و اعلان‌های روزانه',
+      body: 'هر روز با پیام‌های نورانی دلگرم شوید: آیه صبحگاهی ۷:۰۰، حدیث ۱۰:۰۰، '
+          'حکمت ۱۳:۰۰ و وصیت شهید ۱۶:۰۰. قابلیت تنظیم دلخواه در هر ساعت.',
       showNotifyButton: true,
     ),
     _Slide(
-      icon: Icons.touch_app_outlined,
-      title: 'ذکرشمار',
-      body: 'صلوات و ذکرهای منتخب را با یک لمس بشمارید؛ آمار هر ذکر جداگانه '
-          'ذخیره می‌شود و هیچ‌وقت گم نمی‌شود.',
+      icon: Icons.touch_app_rounded,
+      title: 'ذکرشمار و صلوات‌شمار هوشمند',
+      body: 'ذکرهای مشهور و صلوات را با بازخورد لمسی دقیق بشمارید. '
+          'آمار هر ذکر جداگانه ثبت شده و در هر زمان قابل مشاهده است.',
     ),
   ];
 
@@ -80,8 +68,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     widget.onDone();
   }
 
-  /// Slide 2's action: enable the master notification switch right here —
-  /// this also seeds the four default schedules (07/10/13/16).
   Future<void> _enableNotifications() async {
     if (_enabling) return;
     setState(() {
@@ -105,6 +91,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isLast = _page == _slides.length - 1;
 
     return Scaffold(
@@ -113,100 +100,138 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: SafeArea(
           child: Column(
             children: [
+              // Top Skip Bar
               Align(
                 alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: _finish,
-                  child: const Text('رد شدن'),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, top: 4),
+                  child: TextButton(
+                    onPressed: _finish,
+                    child: Text(
+                      'رد شدن',
+                      style: TextStyle(
+                        fontFamily: HodaTheme.fontFamily,
+                        color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
+
+              // Swipeable Slides
               Expanded(
                 child: PageView.builder(
                   controller: _controller,
+                  physics: const BouncingScrollPhysics(),
                   itemCount: _slides.length,
                   onPageChanged: (i) => setState(() => _page = i),
                   itemBuilder: (context, i) {
                     final slide = _slides[i];
                     return Padding(
-                      padding: const EdgeInsets.fromLTRB(32, 8, 32, 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (i == 0) ...[
-                            const HodaLogo(size: 120),
-                            const SizedBox(height: 32),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: HodaColors.turquoise.withOpacity(0.25),
+                                    blurRadius: 32,
+                                    spreadRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: const HodaLogo(size: 130),
+                            ),
+                            const SizedBox(height: 36),
                           ] else ...[
                             Container(
                               width: 140,
                               height: 140,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                gradient: const LinearGradient(
+                                gradient: LinearGradient(
                                   colors: [
                                     HodaColors.turquoise,
-                                    HodaColors.forestGreen
+                                    HodaColors.forestGreen,
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: HodaColors.turquoise
-                                        .withOpacity(0.30),
-                                    blurRadius: 26,
+                                    color: HodaColors.turquoise.withOpacity(0.35),
+                                    blurRadius: 28,
                                     spreadRadius: 2,
                                   ),
                                 ],
                               ),
-                              child: Icon(slide.icon,
-                                  size: 62, color: Colors.white),
+                              child: Icon(slide.icon, size: 66, color: Colors.white),
                             ),
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 36),
                           ],
                           Text(
                             slide.title,
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? HodaColors.cream : HodaColors.inkGreen,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             slide.body,
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyLarge,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              height: 1.9,
+                              color: isDark ? HodaColors.darkTextMuted : HodaColors.textMuted,
+                            ),
                           ),
                           if (slide.showNotifyButton) ...[
                             const SizedBox(height: 28),
                             if (_enableResult == true) ...[
-                              const Icon(Icons.check_circle_outline,
-                                  color: HodaColors.forestGreen, size: 28),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'اعلان‌ها فعال شد! 🌿',
-                                style: TextStyle(
-                                  color: HodaColors.forestGreen,
-                                  fontWeight: FontWeight.w700,
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: HodaColors.forestGreen.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.check_circle_rounded, color: HodaColors.forestGreen, size: 22),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'اعلان‌های روزانه فعال شد 🌿',
+                                      style: TextStyle(
+                                        fontFamily: HodaTheme.fontFamily,
+                                        color: HodaColors.forestGreen,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ] else
                               FilledButton.icon(
-                                onPressed:
-                                    _enabling ? null : _enableNotifications,
+                                onPressed: _enabling ? null : _enableNotifications,
                                 icon: _enabling
                                     ? const SizedBox(
                                         width: 18,
                                         height: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                       )
-                                    : const Icon(
-                                        Icons.notifications_active_outlined,
-                                        size: 20),
+                                    : const Icon(Icons.notifications_active_rounded, size: 18),
                                 label: const Text('فعال‌سازی اعلان‌ها'),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: HodaColors.turquoise,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 12),
+                                  backgroundColor: HodaColors.forestGreen,
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
                               ),
                           ],
@@ -216,45 +241,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   },
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  _slides.length,
-                  (i) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: i == _page ? 22 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: i == _page
-                          ? HodaColors.turquoise
-                          : HodaColors.gold.withOpacity(0.45),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
+
+              // Indicators & Button Bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: isLast
-                        ? _finish
-                        : () => _controller.nextPage(
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOut,
-                            ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: HodaColors.turquoise,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.fromLTRB(28, 10, 28, 24),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _slides.length,
+                        (i) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: i == _page ? 28 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: i == _page
+                                ? HodaColors.turquoise
+                                : (isDark ? HodaColors.darkBorder : HodaColors.gold.withOpacity(0.35)),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Text(isLast ? 'شروع کنیم' : 'بعدی'),
-                  ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: isLast
+                            ? _finish
+                            : () => _controller.nextPage(
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutCubic,
+                                ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: HodaColors.forestGreen,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        ),
+                        child: Text(
+                          isLast ? 'ورود به هُدا' : 'ادامه',
+                          style: const TextStyle(
+                            fontFamily: HodaTheme.fontFamily,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
             ],
           ),
         ),

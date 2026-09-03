@@ -11,7 +11,7 @@ import '../theme/content_style.dart';
 import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
 import '../widgets/hoda_app_bar.dart';
-import '../widgets/hoda_logo.dart';
+import '../widgets/hoda_wordmark.dart';
 import '../widgets/hoda_nav_bar.dart';
 import '../widgets/hoda_pattern.dart';
 import '../widgets/motion.dart';
@@ -349,9 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const HodaLogo(size: 30),
-          const SizedBox(width: 8),
-          Text('هُدا', style: HodaTheme.appNameStyle(context, size: 25)),
+          const HodaWordmark(height: 34),
         ],
       ),
       actions: <Widget>[
@@ -567,9 +565,7 @@ class _LoadingShell extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const HodaLogo(size: 30),
-            const SizedBox(width: 8),
-            Text('هُدا', style: HodaTheme.appNameStyle(context, size: 25)),
+            const HodaWordmark(height: 34),
           ],
         ),
       ),

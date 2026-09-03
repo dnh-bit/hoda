@@ -1,7 +1,7 @@
 name: hoda
 description: "هُدا - اپلیکیشن معنوی روزانه"
 publish_to: 'none'
-version: 0.1.8+18
+version: 0.1.9+19
 
 environment:
   sdk: ^3.5.4
@@ -28,6 +28,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/app-profile.png
+    - assets/brand/hoda-allah-calligraphy.png
     - assets/brand/hoda-logo.jpg
     - assets/brand/hoda-typography.jpg
     - assets/hoda.db

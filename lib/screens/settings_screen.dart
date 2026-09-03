@@ -18,7 +18,7 @@ import '../widgets/section_header.dart';
 
 /// App version shown at the bottom of this screen. Keep in sync with the
 /// `version:` field in pubspec.yaml (currently 0.2.0).
-const String kHodaVersionFa = '۰.۱.۸';
+const String kHodaVersionFa = '۰.۱.۹';
 
 /// Icon for a notification content type.
 IconData _iconForType(String type) {

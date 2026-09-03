@@ -7,8 +7,8 @@ import '../theme/hoda_theme.dart';
 import '../utils/fa_num.dart';
 
 /// App version shown at the bottom of this screen. Keep in sync with the
-/// `version:` field in pubspec.yaml (currently 0.1.5).
-const String kHodaVersionFa = '۰.۱.۵';
+/// `version:` field in pubspec.yaml (currently 0.1.6).
+const String kHodaVersionFa = '۰.۱.۶';
 
 /// Settings: theme, and the multi-schedule notification manager (up to five
 /// daily notifications, each with its own time and content type).

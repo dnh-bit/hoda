@@ -1,51 +1,69 @@
 import 'package:flutter/material.dart';
+
 import '../theme/hoda_theme.dart';
 
-/// Modern section header with an icon badge and optional trailing action.
+/// Section title with a gradient icon badge, optional subtitle and a trailing
+/// action. Used to structure every long page in the app.
 class SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Widget? action;
-  final Color? accentColor;
-
   const SectionHeader({
     super.key,
     required this.icon,
     required this.title,
+    this.subtitle,
     this.action,
-    this.accentColor,
+    this.color,
   });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final color = accentColor ?? (isDark ? HodaColors.turquoiseLight : HodaColors.forestGreen);
+    final ThemeData theme = Theme.of(context);
+    final HodaPalette palette = HodaPalette.of(context);
+    final Color c = color ?? palette.accent;
 
     return Row(
-      children: [
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
         Container(
-          width: 32,
-          height: 32,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(10),
+            gradient: palette.tintGradient(c),
+            borderRadius: HodaRadius.all(HodaRadius.xs),
+            border: Border.all(color: c.withOpacity(0.28)),
           ),
-          child: Center(
-            child: Icon(icon, size: 18, color: color),
-          ),
+          child: Icon(icon, size: 18, color: c),
         ),
         const SizedBox(width: 10),
-        Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-            color: isDark ? HodaColors.cream : HodaColors.inkGreen,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium,
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+            ],
           ),
         ),
-        const Spacer(),
-        if (action != null) action!,
+        if (action != null) ...<Widget>[
+          const SizedBox(width: 8),
+          action!,
+        ],
       ],
     );
   }

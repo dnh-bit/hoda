@@ -35,7 +35,7 @@ jobs:
           HODA_KEYSTORE_PASSWORD: ${{ secrets.HODA_KEYSTORE_PASSWORD }}
         run: |
           echo "$HODA_UPLOAD_KEYSTORE_B64" | base64 --decode > android/app/hoda-upload.jks
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=hodaUpload\nstoreFile=hoda-upload.jks\n' \
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=hoda-upload\nstoreFile=hoda-upload.jks\n' \
             "$HODA_KEYSTORE_PASSWORD" "$HODA_KEYSTORE_PASSWORD" > android/key.properties
 
       - name: Build APK (release, signed)

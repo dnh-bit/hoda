@@ -214,6 +214,23 @@ class SalawatStore {
     _schedulePersist();
   }
 
+  /// -1 on both counters of the selected dhikr (never below zero).
+  ///
+  /// Wired to the «اصلاح» button next to the counter: a mis-tap used to be
+  /// permanent, which is a bad thing to do to someone counting a dhikr.
+  static void decrement() {
+    final id = selectedId.value;
+    final current = counts.value[id] ?? SalawatCounts.zero;
+    if (current.today == 0 && current.total == 0) return;
+    final next = Map<int, SalawatCounts>.of(counts.value);
+    next[id] = SalawatCounts(
+      today: current.today > 0 ? current.today - 1 : 0,
+      total: current.total > 0 ? current.total - 1 : 0,
+    );
+    counts.value = next;
+    _schedulePersist();
+  }
+
   static void _schedulePersist() {
     _debounce?.cancel();
     _debounce = Timer(_persistDelay, () {

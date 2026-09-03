@@ -107,8 +107,11 @@ void main() {
           '‏.${FaNum.digits(m.group(2)!)}'
           '‏.${FaNum.digits(m.group(3)!)}';
       // Compare only the numeric prefix; ignore ZWNJ and any suffix (بتا…).
-      String strip(String s) =>
-          s.replaceAll('\u200c', '').split(' ').first;
+      String strip(String s) => s
+          .replaceAll('\u200c', '')
+          .replaceAll('\u200f', '')
+          .split(' ')
+          .first;
       expect(strip(kHodaVersionFa), strip(expected));
     });
   });

@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'services/favorites_store.dart';
 import 'services/notification_service.dart';
+import 'services/reader_settings.dart';
 import 'services/theme_controller.dart';
 import 'utils/app_error.dart';
 
@@ -43,7 +45,11 @@ Future<void> main() async {
   };
 
   await runZonedGuarded(() async {
+    // Three tiny preference reads; all of them are needed for the very first
+    // frame to be correct (theme, reader size, bookmark icons).
     await ThemeController.load();
+    await ReaderSettings.ensureLoaded();
+    await FavoritesStore.ensureLoaded();
     runApp(const HodaApp());
 
     // Re-arm every enabled daily notification after a reboot, an app update or

@@ -1,294 +1,322 @@
 import 'package:flutter/material.dart';
 
 import '../models/daily_content.dart';
+import '../theme/content_style.dart';
+import '../theme/hoda_theme.dart';
+import '../services/favorites_store.dart';
+import '../utils/content_actions.dart';
 import 'arabic_text.dart';
+import 'hoda_pattern.dart';
+import 'motion.dart';
 
-/// Standard card used for every piece of content (verse, hadith, martyr will,
-/// Nahj wisdom). Arabic and Persian bodies are styled separately.
+/// The card every piece of content is shown in — verse, hadith, martyr will,
+/// Nahj wisdom or the dhikr of the day.
+///
+/// Anatomy:
+/// * a coloured accent strip and a watermark icon that identify the family at a
+///   glance (colours come from [ContentStyle], never hard-coded by callers),
+/// * a header with a tinted icon badge, the title and an optional badge label
+///   («آیه روز»),
+/// * the Arabic scripture in a sunken, framed panel (Naskh face, RTL, generous
+///   leading),
+/// * the Persian body, clipped to [maxPersianLines] in previews,
+/// * a footer with the source and the copy / bookmark actions.
 class ContentCard extends StatelessWidget {
-  final DailyContent content;
-  final Color borderColor;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  /// When set, the Persian body is clipped to this many lines (list previews).
-  final int? maxPersianLines;
-
-  /// When set, the Arabic body is clipped to this many lines (list previews).
-  final int? maxArabicLines;
-
   const ContentCard({
     super.key,
     required this.content,
-    required this.borderColor,
-    required this.icon,
+    this.style,
     this.onTap,
     this.maxPersianLines,
     this.maxArabicLines,
+    this.badgeLabel,
+    this.showActions = true,
+    this.compact = false,
   });
 
-  // ───────────────────────── design tokens ─────────────────────────
-  /// Card corner radius. Inner blocks step down by 2–4 for optical nesting.
-  static const double _radius = 16;
-  static const double _innerRadius = 13;
-  static const EdgeInsets _cardMargin =
-      EdgeInsets.symmetric(horizontal: 4, vertical: 7);
-  static const EdgeInsets _contentPadding = EdgeInsets.fromLTRB(20, 18, 20, 20);
+  final DailyContent content;
+
+  /// Overrides the family resolved from the content uid (placeholders, daily
+  /// cards built by hand).
+  final ContentStyle? style;
+
+  final VoidCallback? onTap;
+  final int? maxPersianLines;
+  final int? maxArabicLines;
+
+  /// Small pill in the header, e.g. «آیه روز».
+  final String? badgeLabel;
+
+  final bool showActions;
+
+  /// Tighter paddings and type, for carousels and dense lists.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final radius = BorderRadius.circular(_radius);
+    final ThemeData theme = Theme.of(context);
+    final HodaPalette palette = HodaPalette.of(context);
+    final ContentStyle cs = style ?? ContentStyle.forContent(content);
+    final Color color = cs.colorOf(context);
+    final double pad = compact ? 16 : 18;
 
-    // The card surface picks up a whisper of the accent so each content type
-    // feels tinted without ever looking coloured.
-    final surface = Color.alphaBlend(
-      borderColor.withOpacity(isDark ? 0.07 : 0.022),
-      theme.cardColor,
-    );
-
-    return Semantics(
-      button: onTap != null,
+    return PressableScale(
+      onTap: onTap,
+      onLongPress: () => ContentActions.copy(context, content),
       child: Container(
-        margin: _cardMargin,
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          boxShadow: [
-            // Wide, accent-tinted ambient glow — this carries the elevation.
-            BoxShadow(
-              color: borderColor.withOpacity(isDark ? 0.22 : 0.11),
-              blurRadius: 24,
-              spreadRadius: -4,
-              offset: const Offset(0, 10),
-            ),
-            // Tight neutral contact shadow keeps the card grounded.
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.30 : 0.05),
-              blurRadius: 5,
-              spreadRadius: -1,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Material(
-          color: surface,
-          clipBehavior: Clip.antiAlias,
-          borderRadius: radius,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: radius,
-            splashColor: borderColor.withOpacity(0.07),
-            highlightColor: borderColor.withOpacity(0.04),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                // Hairline border instead of the old heavy 1.6px stroke.
-                border: Border.all(
-                  color: borderColor.withOpacity(isDark ? 0.30 : 0.15),
-                  width: 1,
-                ),
-                // Soft top-down sheen for a lit, glassy surface.
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    borderColor.withOpacity(isDark ? 0.07 : 0.035),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5],
-                ),
+        decoration: palette.card(accentColor: color),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: <Widget>[
+            // Family watermark — pure texture, sits under everything.
+            PositionedDirectional(
+              top: -22,
+              end: -18,
+              child: Icon(
+                cs.icon,
+                size: 116,
+                color: color.withOpacity(palette.isDark ? 0.06 : 0.05),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildAccentBar(),
-                  Padding(
-                    padding: _contentPadding,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(theme, isDark),
-                        if (content.hasArabic) ...[
-                          const SizedBox(height: 16),
-                          _buildArabicBlock(isDark),
-                        ],
-                        if (content.hasArabic && content.hasPersian) ...[
-                          const SizedBox(height: 18),
-                          _buildDivider(),
-                          const SizedBox(height: 6),
-                        ],
-                        if (content.hasPersian) ...[
-                          const SizedBox(height: 10),
-                          _buildPersian(theme),
-                        ],
-                        if (content.hasSource) ...[
-                          const SizedBox(height: 18),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: _buildSource(theme, isDark),
-                          ),
-                        ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                // Accent strip.
+                Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: <Color>[
+                        color.withOpacity(0.85),
+                        color.withOpacity(0.15),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(pad, pad - 2, pad, pad - 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      _header(theme, palette, cs, color),
+                      if (content.hasArabic) ...<Widget>[
+                        SizedBox(height: compact ? 12 : 14),
+                        _arabicPanel(palette, color),
+                      ],
+                      if (content.hasPersian) ...<Widget>[
+                        SizedBox(height: content.hasArabic ? 14 : 12),
+                        Text(
+                          content.persian.trim(),
+                          textAlign: TextAlign.justify,
+                          maxLines: maxPersianLines,
+                          overflow: maxPersianLines == null
+                              ? null
+                              : TextOverflow.ellipsis,
+                          style: compact
+                              ? theme.textTheme.bodyMedium
+                              : theme.textTheme.bodyLarge,
+                        ),
+                      ],
+                      SizedBox(height: compact ? 8 : 12),
+                      _footer(context, theme, palette, color),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Slim accent ribbon along the top edge — identifies the content type.
-  Widget _buildAccentBar() {
-    return Container(
-      height: 3,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            borderColor.withOpacity(0.85),
-            borderColor.withOpacity(0.45),
-            borderColor.withOpacity(0.12),
           ],
         ),
       ),
     );
   }
 
-  /// Badge + title + affordance chevron.
-  Widget _buildHeader(ThemeData theme, bool isDark) {
+  Widget _header(
+    ThemeData theme,
+    HodaPalette palette,
+    ContentStyle cs,
+    Color color,
+  ) {
     return Row(
-      children: [
+      children: <Widget>[
         Container(
-          padding: const EdgeInsets.all(9),
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
-            color: borderColor.withOpacity(isDark ? 0.20 : 0.10),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor.withOpacity(0.18)),
+            gradient: palette.tintGradient(color),
+            borderRadius: HodaRadius.all(HodaRadius.xs),
+            border: Border.all(color: color.withOpacity(0.30)),
           ),
-          child: Icon(icon, color: borderColor, size: 18),
+          child: Icon(cs.icon, size: 19, color: color),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            content.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: borderColor,
-              letterSpacing: 0.1,
-              height: 1.25,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                content.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(color: color),
+              ),
+              if (badgeLabel == null && content.hasNote)
+                Text(
+                  content.note,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+            ],
           ),
         ),
-        if (onTap != null) ...[
+        if (badgeLabel != null) ...<Widget>[
           const SizedBox(width: 8),
           Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: borderColor.withOpacity(isDark ? 0.18 : 0.08),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: palette.pill(color, opacity: 0.14),
+            child: Text(
+              badgeLabel!,
+              style: theme.textTheme.labelSmall?.copyWith(color: color),
             ),
-            child: Icon(Icons.arrow_forward_ios, size: 11, color: borderColor),
+          ),
+        ],
+        if (onTap != null) ...<Widget>[
+          const SizedBox(width: 6),
+          Icon(
+            Icons.chevron_left,
+            size: 22,
+            color: color.withOpacity(0.75),
           ),
         ],
       ],
     );
   }
 
-  /// Arabic body sits in its own tinted, softly bordered well so the sacred
-  /// text reads as the visual anchor of the card.
-  Widget _buildArabicBlock(bool isDark) {
+  Widget _arabicPanel(HodaPalette palette, Color color) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(_innerRadius),
-        border: Border.all(color: borderColor.withOpacity(isDark ? 0.22 : 0.12)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            borderColor.withOpacity(isDark ? 0.14 : 0.075),
-            borderColor.withOpacity(isDark ? 0.06 : 0.025),
-          ],
-        ),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 16,
+        vertical: compact ? 12 : 16,
       ),
-      child: ArabicText(
-        content.arabic,
-        fontWeight: FontWeight.w600,
-        maxLines: maxArabicLines,
-      ),
-    );
-  }
-
-  /// Feathered hairline that fades at both ends — softer than a full Divider.
-  Widget _buildDivider() {
-    return Container(
-      height: 1,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            borderColor.withOpacity(0.0),
-            borderColor.withOpacity(0.35),
-            borderColor.withOpacity(0.0),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Persian translation: generous line height for comfortable RTL reading.
-  Widget _buildPersian(ThemeData theme) {
-    return Text(
-      content.persian,
-      textAlign: TextAlign.center,
-      maxLines: maxPersianLines,
-      overflow: maxPersianLines == null ? null : TextOverflow.ellipsis,
-      style: theme.textTheme.bodyLarge?.copyWith(
-        height: 1.9,
-        letterSpacing: 0.15,
-        fontWeight: FontWeight.w500,
-        color: theme.colorScheme.onSurface.withOpacity(0.86),
-      ),
-    );
-  }
-
-  /// Attribution rendered as a quiet pill so it never competes with the body.
-  Widget _buildSource(ThemeData theme, bool isDark) {
-    final tertiary = theme.colorScheme.tertiary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-      decoration: BoxDecoration(
-        color: tertiary.withOpacity(isDark ? 0.16 : 0.075),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: tertiary.withOpacity(0.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.auto_stories_rounded, size: 13, color: tertiary),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              content.source,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: tertiary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-                height: 1.2,
-              ),
+      decoration: palette.inset(accentColor: color),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: PatternLayer(
+              color: color.withOpacity(palette.isDark ? 0.05 : 0.045),
+              tile: 54,
+              drawGrid: false,
             ),
+          ),
+          ArabicText(
+            content.arabic,
+            fontSize: compact ? 19 : 21,
+            fontWeight: FontWeight.w600,
+            maxLines: maxArabicLines,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _footer(
+    BuildContext context,
+    ThemeData theme,
+    HodaPalette palette,
+    Color color,
+  ) {
+    return Row(
+      children: <Widget>[
+        if (content.hasSource)
+          Expanded(
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  Icons.local_offer_outlined,
+                  size: 13,
+                  color: palette.accent.withOpacity(0.85),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    content.source.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: palette.accent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          const Spacer(),
+        if (showActions) ...<Widget>[
+          _CardAction(
+            icon: Icons.copy_outlined,
+            tooltip: 'کپی متن',
+            color: palette.muted,
+            onTap: () => ContentActions.copy(context, content),
+          ),
+          _BookmarkAction(content: content),
+        ],
+      ],
+    );
+  }
+}
+
+class _CardAction extends StatelessWidget {
+  const _CardAction({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: PressableScale(
+        onTap: onTap,
+        scale: 0.88,
+        child: Padding(
+          padding: const EdgeInsets.all(7),
+          child: Icon(icon, size: 18, color: color),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bookmark toggle that keeps itself in sync with [FavoritesStore].
+class _BookmarkAction extends StatelessWidget {
+  const _BookmarkAction({required this.content});
+
+  final DailyContent content;
+
+  @override
+  Widget build(BuildContext context) {
+    final HodaPalette palette = HodaPalette.of(context);
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: FavoritesStore.uids,
+      builder: (BuildContext context, Set<String> uids, _) {
+        final bool saved = content.uid != null && uids.contains(content.uid);
+        return _CardAction(
+          icon: saved ? Icons.bookmark : Icons.bookmark_outline,
+          tooltip: saved ? 'حذف از نشان‌شده‌ها' : 'نشان‌گذاری',
+          color: saved ? palette.accent : palette.muted,
+          onTap: () => ContentActions.toggleFavorite(context, content),
+        );
+      },
     );
   }
 }

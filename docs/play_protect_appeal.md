@@ -9,6 +9,8 @@ Fill-in guide for: https://support.google.com/googleplay/android-developer/conta
 
 Copy-paste the text below (English, concise, factual):
 
+> ⚠️ **Per-release fields:** the appeal is tied to ONE specific APK. For every new release you must re-submit with the NEW version number and the NEW file SHA256 (see «Fresh numbers per release» at the bottom).
+
 ---
 
 Hi,
@@ -83,3 +85,17 @@ We follow Google Play policies and will fix anything specific immediately. Pleas
 Best regards,
 The Hoda development team
 ```
+
+## Fresh numbers per release (update these before each new appeal)
+
+The Play Protect block is tied to the exact APK file — after every release,
+recompute and re-submit:
+
+1. `sha256sum hoda-vX.Y.Z.apk` (or `shasum -a 256` on macOS) → new file hash.
+2. Version line in the appeal text → new versionName + versionCode.
+3. Re-open https://support.google.com/googleplay/android-developer/contact/protectappeals
+   and file it again for the new build (the old appeal does NOT carry over).
+
+Log:
+- 0.1.4 (code 14): file SHA256 `b87dc9809f197e5530edf1a706ace2cb95746b8a7ca2482f4bd4e97eb5550a4b` — appealed 2026-08-31
+- 0.1.9 (code 19): file SHA256 `7ec7692e33e6f16ac84a50ba19fe207b9872f8c1168ffe3361621fab5ad5dd99` — 960-char appeal text ready 2026-09-05 (/tmp/appeal_019.txt)

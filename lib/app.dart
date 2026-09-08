@@ -3,6 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/content_repository.dart';
+import 'services/notification_service.dart';
 import 'services/theme_controller.dart';
 import 'theme/hoda_theme.dart';
 import 'utils/app_error.dart';
@@ -60,8 +62,63 @@ class HodaApp extends StatelessWidget {
 }
 
 /// Decides between the onboarding slides and the main shell on app start.
-class _AppGate extends StatelessWidget {
+///
+/// While the gate resolves it also performs the **day rollover**: daily
+/// content lives in a local SQLite copy and each card is picked by a
+/// day-indexed rotation, so a device that left the app open across midnight
+/// (or resumed it the next morning) must re-query the database — otherwise
+/// «محتوای امروز» keeps showing yesterday's picks until a full restart. The
+/// refresh runs once per process per local day (keyed by the epoch-day) and
+/// re-arms the daily notifications so their bodies match the new picks.
+class _AppGate extends StatefulWidget {
   const _AppGate();
+
+  @override
+  State<_AppGate> createState() => _AppGateState();
+}
+
+class _AppGateState extends State<_AppGate> with WidgetsBindingObserver {
+  /// Epoch-day the rollover last ran for; survives only within this process.
+  static int? _lastRolloverDay;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _maybeRollover();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the foreground is the one moment a day may have changed
+    // while the process stayed alive (user left the app open overnight).
+    if (state == AppLifecycleState.resumed) _maybeRollover();
+  }
+
+  /// Refreshes the daily selection when the local day changed since the last
+  /// run. Never blocks the first frame and never throws.
+  Future<void> _maybeRollover() async {
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day);
+    final epochDay = day.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+    if (_lastRolloverDay == epochDay) return;
+    _lastRolloverDay = epochDay;
+    try {
+      // Loading the daily selection advances the rotation state for the new
+      // day (day-gap aware), and re-arming keeps the notification bodies in
+      // step with what the home cards now show.
+      await ContentRepository.loadDaily();
+      await NotificationService.restoreSchedule();
+    } catch (_) {
+      // Rollover is best-effort; the app must always come up.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

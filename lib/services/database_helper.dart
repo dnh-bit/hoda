@@ -95,9 +95,16 @@ class DatabaseHelper {
   }
 
   /// Index of today's row so content rotates once per day.
-  static int _dayOfYear([DateTime? now]) {
+  ///
+  /// Anchored to the **epoch-day count** (whole days since 1970-01-01 UTC)
+  /// rather than «day of year»: the latter wraps back to 0 on January 1st, so
+  /// Dec 31 → Jan 1 would repeat the same cards. Local days are used, and the
+  /// local-day instant is derived from [DateTime.now] so a device that sleeps
+  /// through midnight still lands on the new day the next time it checks.
+  static int _dayIndex([DateTime? now]) {
     final today = now ?? DateTime.now();
-    return today.difference(DateTime(today.year, 1, 1)).inDays;
+    final localDay = DateTime(today.year, today.month, today.day);
+    return localDay.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
   }
 
   /// Picks today's row of [table] from a **no-repeat rotation**.
@@ -128,8 +135,19 @@ class DatabaseHelper {
     int seed = _stableSeed(table);
     if (stateRows.isNotEmpty) {
       final shown = (stateRows.first['shown_ids'] as String?) ?? '';
-      final parsed = int.tryParse(shown);
+      // `shown_ids` stores "<epoch>|<epoch-day it was written on>", so the
+      // deck advances once per calendar day even if the app never opens on
+      // the boundary — opening the app two days later still jumps two cards.
+      // A bare number is a pre-0.1.10 epoch: keep it and start day-tracking
+      // from today.
+      final parts = shown.split('|');
+      final parsed = int.tryParse(parts.first);
       if (parsed != null && parsed >= 0) epoch = parsed;
+      final storedDay = parts.length > 1 ? int.tryParse(parts[1]) : null;
+      final todayIndex = _dayIndex();
+      if (storedDay != null && todayIndex > storedDay) {
+        epoch += todayIndex - storedDay;
+      }
       final storedSeed = (stateRows.first['last_index'] as num?)?.toInt();
       if (storedSeed != null && storedSeed > 0) seed = storedSeed;
       if (forceSeed) {
@@ -138,19 +156,21 @@ class DatabaseHelper {
       }
       await db.update(
         'shuffle_state',
-        {'shown_ids': epoch.toString(), 'last_index': seed},
+        {'shown_ids': '$epoch|$todayIndex', 'last_index': seed},
         where: 'table_name = ?',
         whereArgs: [table],
       );
     } else {
-      // Persian day counts from Saturday; any stable day-based epoch works.
-      epoch = _dayOfYear();
+      // No stored state yet (first launch on this install): start from today's
+      // epoch-day so the deck position moves forward exactly one step per day.
+      final todayIndex = _dayIndex();
+      epoch = todayIndex;
       if (forceSeed) {
         seed = DateTime.now().microsecondsSinceEpoch & 0x7fffffff;
         epoch += 1;
       }
       await db.insert('shuffle_state',
-          {'table_name': table, 'shown_ids': epoch.toString(), 'last_index': seed});
+          {'table_name': table, 'shown_ids': '$epoch|$todayIndex', 'last_index': seed});
     }
 
     final deck = _shuffledIds(ids, seed);
@@ -224,8 +244,19 @@ class DatabaseHelper {
         'جمعه',
       ];
       final dayName = daysFa[(DateTime.now().weekday + 1) % 7];
-      var zekrRows =
-          await db.query('zekr', where: 'day = ?', whereArgs: [dayName]);
+      // The `day` column was authored with ZWNJ («سه‌شنبه») and can drift in
+      // spelling across content refreshes, so match on a normalized form.
+      final normalize = (String input) => input
+          .replaceAll('\u200c', ' ') // ZWNJ -> space
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .replaceAll('ي', 'ی')
+          .replaceAll('ك', 'ک')
+          .trim();
+      final wanted = normalize(dayName);
+      final allZekr = await db.query('zekr');
+      var zekrRows = allZekr
+          .where((row) => normalize((row['day'] ?? '') as String) == wanted)
+          .toList();
       if (zekrRows.isEmpty) {
         zekrRows = await db.query('zekr', limit: 1);
       }

@@ -78,6 +78,10 @@ jobs:
           TAG="v${{ steps.ver.outputs.version }}"
           TITLE="${{ steps.ver.outputs.short }}"
           APK="build/app/outputs/flutter-apk/hoda-v${{ steps.ver.outputs.short }}.apk"
+          # Versions whose name contains a dash (e.g. 0.2.0-beta) publish as
+          # pre-releases; plain versions stay full releases.
+          PRERELEASE_FLAG=""
+          case "$TITLE" in *-*) PRERELEASE_FLAG="--prerelease";; esac
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists — updating assets"
             gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
@@ -86,6 +90,7 @@ jobs:
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" \
+              $PRERELEASE_FLAG \
               --notes "اپلیکیشن هُدا — نسخه $TITLE
           📱 فایل نصبی: hoda-v${{ steps.ver.outputs.short }}.apk
 

@@ -99,3 +99,4 @@ recompute and re-submit:
 Log:
 - 0.1.4 (code 14): file SHA256 `b87dc9809f197e5530edf1a706ace2cb95746b8a7ca2482f4bd4e97eb5550a4b` — appealed 2026-08-31
 - 0.1.9 (code 19): file SHA256 `7ec7692e33e6f16ac84a50ba19fe207b9872f8c1168ffe3361621fab5ad5dd99` — 960-char appeal text ready 2026-09-05 (/tmp/appeal_019.txt)
+- 0.2.0 (code 20): file SHA256 `e5ed2459ec9feb9c328efd0d58090ae9678f6b20f4516ad7e1d313a6f73f85c6` — fresh appeal texts 2026-09-11: full `docs/appeal_v020_full.txt`, short `docs/appeal_v020_short.txt` (1020 chars)

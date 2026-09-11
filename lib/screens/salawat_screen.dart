@@ -121,6 +121,36 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
     HapticFeedback.selectionClick();
   }
 
+  /// Clears only today's counter of the selected dhikr (lifetime total kept).
+  Future<void> _resetToday() async {
+    final Dhikr? dhikr = SalawatStore.selected;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text('صفر کردن شمارندهٔ امروز «${dhikr?.title ?? 'ذکر'}»'),
+        content: const Text(
+          'فقط شمارندهٔ امروز این ذکر صفر می‌شود و مجموع کل شمرده‌شده‌ها '
+          'حفظ می‌شود. این کار قابل بازگشت نیست.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('انصراف'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: HodaColors.danger),
+            child: const Text('صفر کن'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await SalawatStore.resetToday();
+    HapticFeedback.selectionClick();
+  }
+
   /// Clears the selected dhikr's lifetime total (and today's counter with it).
   Future<void> _resetTotal() async {
     final Dhikr? dhikr = SalawatStore.selected;
@@ -275,6 +305,12 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
                         const SizedBox(height: 8),
                         _GoalChips(goal: goal),
                         const SizedBox(height: 22),
+                        OutlinedButton.icon(
+                          onPressed: tally.today == 0 ? null : _resetToday,
+                          icon: const Icon(Icons.today_outlined, size: 18),
+                          label: const Text('صفر کردن شمارندهٔ امروز'),
+                        ),
+                        const SizedBox(height: 10),
                         OutlinedButton.icon(
                           onPressed: _resetTotal,
                           icon: const Icon(Icons.refresh, size: 18),

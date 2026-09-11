@@ -21,8 +21,9 @@ class DatabaseHelper {
   /// History: 2 = v0.1.0 refresh (185 verses, new salawat schema, tafsir +
   /// notif_excerpt columns). 3 = v0.1.2 fixes (trailing citation numbers
   /// stripped, hadith narrator column). 4 = v0.1.5-beta (hadith family column
-  /// for the topic filter).
-  static const int dbContentVersion = 4;
+  /// for the topic filter). 5 = v0.2.0 content refresh (313 hadiths, 305
+  /// verses, 200 nahj wisdoms, 183 martyr wills, 2 istighfar dhikr entries).
+  static const int dbContentVersion = 5;
 
   static const String _stampKey = 'hoda_db_content_version';
 

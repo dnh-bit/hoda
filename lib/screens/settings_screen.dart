@@ -15,10 +15,11 @@ import '../widgets/hoda_pattern.dart';
 import '../widgets/info_pill.dart';
 import '../widgets/motion.dart';
 import '../widgets/section_header.dart';
+import 'onboarding_screen.dart' show kHodaEitaaUrl, openEitaaChannel;
 
 /// App version shown at the bottom of this screen. Keep in sync with the
 /// `version:` field in pubspec.yaml (currently 0.2.0).
-const String kHodaVersionFa = '۰.۱.۹';
+const String kHodaVersionFa = '۰.۲.۰';
 
 /// Icon for a notification content type.
 IconData _iconForType(String type) {
@@ -160,6 +161,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             reveal(_notificationsSection()),
             const SizedBox(height: 22),
             reveal(const _SavedSection()),
+            const SizedBox(height: 22),
+            reveal(const _EitaaSection()),
             const SizedBox(height: 22),
             reveal(const _AboutCard()),
             const SizedBox(height: 16),
@@ -901,6 +904,83 @@ class _StatusCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// «کانال ایتا» section: a card that opens the app's Eitaa channel
+/// (https://eitaa.com/Hoda_apk) for new-release announcements and daily content.
+class _EitaaSection extends StatelessWidget {
+  const _EitaaSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final HodaPalette palette = HodaPalette.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SectionHeader(
+          icon: Icons.campaign_outlined,
+          title: 'کانال ایتا',
+          subtitle: 'خبرهای نسخه‌های جدید و محتوای معنوی روزانه',
+          color: HodaColors.gold,
+        ),
+        const SizedBox(height: 12),
+        PressableScale(
+          onTap: () => openEitaaChannel(context),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: palette.card(accentColor: HodaColors.gold),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    gradient: palette.tintGradient(HodaColors.gold),
+                    borderRadius: HodaRadius.all(HodaRadius.sm),
+                    border: Border.all(
+                      color: HodaColors.gold.withOpacity(0.45),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.campaign_outlined,
+                    color: HodaColors.gold,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'کانال ایتای هُدا',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'eitaa.com/Hoda_apk',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: palette.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.open_in_new,
+                  size: 20,
+                  color: HodaColors.gold,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

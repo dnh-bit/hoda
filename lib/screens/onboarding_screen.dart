@@ -1,10 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/notification_service.dart';
 import '../theme/hoda_theme.dart';
 import '../widgets/hoda_logo.dart';
 import '../widgets/hoda_pattern.dart';
+
+/// Eitaa channel of the app — shown in onboarding and settings.
+const String kHodaEitaaUrl = 'https://eitaa.com/Hoda_apk';
+
+/// Opens the Eitaa channel page. Tries the native eitaa:// deep link first,
+/// then falls back to the plain https URL (browser / any matching app).
+///
+/// Implemented with a MethodChannel instead of the url_launcher package so the
+/// app keeps its dependency list lean; eitaa.com is a normal https page, so
+/// even without Eitaa installed the browser opens it.
+const MethodChannel _kLinkChannel = MethodChannel('hoda/links');
+
+Future<void> openEitaaChannel(BuildContext context) async {
+  bool ok = false;
+  try {
+    await _kLinkChannel.invokeMethod<void>('openUrl', kHodaEitaaUrl);
+    ok = true;
+  } catch (_) {
+    ok = false;
+  }
+  if (!ok) {
+    // No native handler answered (e.g. no app can open it) — last resort is
+    // clipboard so the user can still reach the channel manually.
+    try {
+      await Clipboard.setData(const ClipboardData(text: kHodaEitaaUrl));
+    } catch (_) {/* ignore */}
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لینک کانال کپی شد: eitaa.com/Hoda_apk')),
+      );
+    }
+  }
+}
 
 /// Preference key under which «onboarding finished» is stored.
 const String kOnboardingDoneKey = 'hoda_onboarding_done_v1';
@@ -53,6 +87,7 @@ class _Slide {
     required this.body,
     this.showNotifyButton = false,
     this.showLogo = false,
+    this.showEitaaButton = false,
   });
 
   final IconData icon;
@@ -60,6 +95,7 @@ class _Slide {
   final String body;
   final bool showNotifyButton;
   final bool showLogo;
+  final bool showEitaaButton;
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
@@ -96,6 +132,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'جست‌وجو و نشان‌گذاری',
       body: 'در کل گنجینه جست‌وجو کنید — اعراب و نگارش مهم نیست — و هر متنی را '
           'که دوست داشتید نشان کنید تا همیشه یک لمس با شما فاصله داشته باشد.',
+    ),
+    _Slide(
+      icon: Icons.campaign_outlined,
+      title: 'کانال ایتای هُدا',
+      body: 'برای اطلاع از نسخه‌های جدید، آموزش‌ها و محتوای معنوی روزانه، عضو '
+          'کانال ایتای هُدا شوید. هر زمان در «تنظیمات» هم می‌توانید به کانال '
+          'سر بزنید.',
+      showEitaaButton: true,
     ),
   ];
 
@@ -221,6 +265,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   height: 2.0,
                                 ),
                               ),
+                              if (slide.showEitaaButton) ...<Widget>[
+                                const SizedBox(height: 26),
+                                FilledButton.icon(
+                                  onPressed: () => openEitaaChannel(context),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor:
+                                        Colors.white.withOpacity(0.16),
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                      color: Colors.white.withOpacity(0.32),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.favorite_border,
+                                    size: 19,
+                                  ),
+                                  label: const Text('عضویت در کانال ایتا'),
+                                ),
+                              ],
                               if (slide.showNotifyButton) ...<Widget>[
                                 const SizedBox(height: 26),
                                 if (_enableResult == true)

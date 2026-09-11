@@ -247,11 +247,22 @@ class SalawatStore {
   }
 
   /// Clears the lifetime total *and* today's counter of the selected dhikr.
-  /// Wired to the «صفر کردن مجموع ذکرها» button.
+  /// Wired to the «صفر کردن شمارنده این ذکر» button.
   static Future<void> resetTotal() {
     final id = selectedId.value;
     final next = Map<int, SalawatCounts>.of(counts.value);
     next[id] = SalawatCounts.zero;
+    counts.value = next;
+    return flush();
+  }
+
+  /// Clears only today's counter of the selected dhikr, keeping the lifetime
+  /// total untouched. Wired to the «صفر کردن شمارنده امروز» button.
+  static Future<void> resetToday() {
+    final id = selectedId.value;
+    final current = counts.value[id] ?? SalawatCounts.zero;
+    final next = Map<int, SalawatCounts>.of(counts.value);
+    next[id] = SalawatCounts(today: 0, total: current.total - current.today);
     counts.value = next;
     return flush();
   }

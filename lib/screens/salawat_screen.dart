@@ -314,7 +314,7 @@ class _SalawatCounterViewState extends State<SalawatCounterView>
                         OutlinedButton.icon(
                           onPressed: _resetTotal,
                           icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('صفر کردن شمارنده این ذکر'),
+                          label: const Text('صفر کردن مجموع کل'),
                         ),
                         const SizedBox(height: 18),
                         const Center(child: OrnamentDivider(width: 130)),

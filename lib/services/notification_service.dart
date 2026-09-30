@@ -538,10 +538,9 @@ class NotificationService {
     final list = List<NotificationSchedule>.of(await schedules())
       ..removeWhere((s) => s.id == id);
     await _writeSchedules(NotificationSchedule.sorted(list));
-    await _guard(
-      'cancel(${NotificationSchedule.baseNotificationId + id})',
-      () => _plugin.cancel(NotificationSchedule.baseNotificationId + id),
-    );
+    for (final pluginId in NotificationSchedule.idsForSlot(id)) {
+      await _guard('cancel($pluginId)', () => _plugin.cancel(pluginId));
+    }
     return scheduleAll();
   }
 
@@ -568,13 +567,16 @@ class NotificationService {
     }
     final exact = await canScheduleExact();
 
+    // One content snapshot per calendar day, shared by all schedules.
+    final dayCache = <int, HodaContent>{};
     for (final schedule in enabled) {
-      await _armSchedule(schedule, exact: exact);
+      await _armSchedule(schedule, exact: exact, dayCache: dayCache);
     }
     return scheduleStatus();
   }
 
-  /// Cancels the five schedule slots (1000..1004).
+  /// Cancels every id the five schedule slots may own (legacy 1000..1004 and
+  /// the per-day ids 2000+).
   ///
   /// Every step is guarded: `cancel(id)` goes through the plugin's Gson-backed
   /// cache, so on a build whose keep rules are missing (or with a queue left
@@ -586,13 +588,15 @@ class NotificationService {
     if (!await _guard('ensurePlugin(cancel)', _ensurePlugin)) return;
 
     var allOk = true;
-    for (var id = 0; id < NotificationSchedule.maxCount; id++) {
-      final pluginId = NotificationSchedule.baseNotificationId + id;
-      final ok = await _guard(
-        'cancel($pluginId)',
-        () => _plugin.cancel(pluginId),
-      );
-      allOk = allOk && ok;
+    for (var slot = 0; slot < NotificationSchedule.maxCount; slot++) {
+      // Legacy repeating id (≤0.2.0+20) plus every per-day id of the slot.
+      for (final pluginId in NotificationSchedule.idsForSlot(slot)) {
+        final ok = await _guard(
+          'cancel($pluginId)',
+          () => _plugin.cancel(pluginId),
+        );
+        allOk = allOk && ok;
+      }
     }
     if (!allOk) await _guard('cancelAll', _plugin.cancelAll);
   }
@@ -955,66 +959,122 @@ class NotificationService {
 
   // ---------------- scheduling engine ----------------
 
-  /// Arms one schedule. Returns true when the plugin accepted it.
+  /// Arms one schedule for the next [NotificationSchedule.horizonDays] days.
+  /// Returns true when the plugin accepted at least the first day.
   /// Never throws — the settings UI keeps working either way.
   ///
-  /// The body and the payload are built **once, here at arm time** by
-  /// [_message]: `matchDateTimeComponents: DateTimeComponents.time` makes the
-  /// OS re-post that same, already-rendered notification every day, so the
-  /// text the user reads and the `uid` in the payload always describe the same
-  /// item — tapping it can therefore open exactly that card.
+  /// ## Why one notification per day (the «stale content» fix)
   ///
-  /// Limitation worth knowing: because the content is frozen at arm time, a
-  /// schedule that is never re-armed keeps showing the item picked back then.
-  /// [restoreSchedule] re-arms everything on each app start, which is what
-  /// refreshes the content in practice; a device that goes days without opening
-  /// the app repeats yesterday's item (and its uid) — consistent, just not new.
+  /// Up to 0.2.0+20 each schedule was a single repeating notification
+  /// (`matchDateTimeComponents: DateTimeComponents.time`). Android re-posts
+  /// that *same, already-rendered* notification every day, so its text was
+  /// frozen at arm time: a user who did not open the app kept receiving the
+  /// previous day's آیه/حدیث/حکمت/وصیت, although the home screen had already
+  /// rotated at 00:00.
+  ///
+  /// Now every day in the horizon gets its own one-shot notification whose
+  /// body is rendered from **that day's** pick
+  /// ([ContentRepository.loadDailyFor], a read-only replay of the daily
+  /// rotation). The text and the `uid` in the payload therefore always match
+  /// the card the home screen shows on that day, with the app closed.
+  ///
+  /// The last day of the horizon is armed as a *repeating* notification: if
+  /// the app stays closed for more than two weeks the user still gets a daily
+  /// notification (repeating that last card) instead of silence. Any app
+  /// start re-arms the whole window again via [restoreSchedule].
   static Future<bool> _armSchedule(
     NotificationSchedule schedule, {
     required bool exact,
+    Map<int, HodaContent>? dayCache,
   }) async {
-    final tz.TZDateTime when;
+    final DateTime first;
     try {
-      when = _nextInstanceOf(schedule.time);
+      first = _nextLocalInstanceOf(schedule.time);
     } catch (error) {
-      // Only possible if timezone initialisation failed above.
       _lastPluginError = 'nextInstanceOf → $error';
       debugPrint('NotificationService: cannot resolve fire time → $error');
       return false;
     }
 
-    final message = await _message(schedule.type, variant: schedule.id);
+    final cache = dayCache ?? <int, HodaContent>{};
+    var firstOk = false;
+    var useExact = exact;
+    const horizon = NotificationSchedule.horizonDays;
 
-    if (await _guard(
-      'zonedSchedule(#${schedule.id}, exact: $exact)',
-      () => _zonedSchedule(schedule, when, message, exact: exact),
-    )) {
-      // A successful arm proves the plugin cache is healthy again, so an older
-      // swallowed error should no longer be reported by [scheduleStatus].
-      _lastPluginError = null;
-      return true;
+    for (var offset = 0; offset < horizon; offset++) {
+      // Plain DateTime arithmetic so month ends and DST follow the device clock.
+      final local = DateTime(
+        first.year,
+        first.month,
+        first.day + offset,
+        schedule.hour,
+        schedule.minute,
+      );
+      final tz.TZDateTime when;
+      try {
+        when = tz.TZDateTime.from(local, tz.local);
+      } catch (error) {
+        _lastPluginError = 'TZDateTime → $error';
+        return firstOk;
+      }
+
+      final dayKey = DateTime(local.year, local.month, local.day)
+          .millisecondsSinceEpoch;
+      HodaContent? content = cache[dayKey];
+      if (content == null) {
+        try {
+          content = await ContentRepository.loadDailyFor(local);
+        } catch (_) {
+          content = null;
+        }
+        if (content != null) cache[dayKey] = content;
+      }
+
+      final message = await _message(
+        schedule.type,
+        variant: schedule.id,
+        content: content,
+        day: local,
+      );
+      final id = schedule.notificationIdForDay(offset);
+      final repeat = offset == horizon - 1;
+
+      var ok = await _guard(
+        'zonedSchedule(#${schedule.id}+$offset, exact: $useExact)',
+        () => _zonedSchedule(schedule, id, when, message,
+            exact: useExact, repeatDaily: repeat),
+      );
+      // `exact_alarms_not_permitted` can still be thrown if the permission was
+      // revoked between the check and the call: fall back to inexact for the
+      // rest of this schedule so the user gets *something*.
+      if (!ok && useExact) {
+        useExact = false;
+        ok = await _guard(
+          'zonedSchedule(#${schedule.id}+$offset, exact: false)',
+          () => _zonedSchedule(schedule, id, when, message,
+              exact: false, repeatDaily: repeat),
+        );
+      }
+      if (offset == 0) firstOk = ok;
+      if (ok) {
+        // A successful arm proves the plugin cache is healthy again, so an
+        // older swallowed error should no longer be reported.
+        _lastPluginError = null;
+      }
     }
-
-    // `exact_alarms_not_permitted` can still be thrown if the permission was
-    // revoked between the check and the call. Retry inexact so the user gets
-    // *something* rather than nothing. (The queue-repair `cancelAll` lives in
-    // [cancelAllHoda], which already ran before this pass — retrying it here
-    // would wipe the sibling schedules armed a moment ago.)
-    if (!exact) return false;
-    return _guard(
-      'zonedSchedule(#${schedule.id}, exact: false)',
-      () => _zonedSchedule(schedule, when, message, exact: false),
-    );
+    return firstOk;
   }
 
   static Future<void> _zonedSchedule(
     NotificationSchedule schedule,
+    int notificationId,
     tz.TZDateTime when,
     _Message message, {
     required bool exact,
+    bool repeatDaily = false,
   }) {
     return _plugin.zonedSchedule(
-      schedule.notificationId,
+      notificationId,
       message.displayTitle,
       message.body,
       when,
@@ -1024,8 +1084,9 @@ class NotificationService {
           : AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      // Repeats every day at the same wall-clock time.
-      matchDateTimeComponents: DateTimeComponents.time,
+      // One-shot for each pre-rendered day; only the horizon's last slot
+      // repeats, as a fallback for a very long absence.
+      matchDateTimeComponents: repeatDaily ? DateTimeComponents.time : null,
       payload: _payloadFor(schedule.type, message.resolvedType, message.uid),
     );
   }
@@ -1124,7 +1185,7 @@ class NotificationService {
     final scheduleReports = <Map<String, dynamic>>[];
 
     for (final schedule in list) {
-      final armed = armedIds.contains(schedule.notificationId);
+      final armed = schedule.allNotificationIds.any(armedIds.contains);
       final active = master && schedule.enabled && (armed || assumeArmed);
       if (active) armedCount++;
       final next =
@@ -1243,12 +1304,20 @@ class NotificationService {
   ///
   /// The result carries the picked item's [DailyContent.uid] so the payload can
   /// point a tap at that exact card; see [_armSchedule] for why the pick made
-  /// here stays the one the user eventually reads.
-  static Future<_Message> _message(String requestedType,
-      {int variant = 0}) async {
+  /// here stays the one the user eventually reads (each future day is
+  /// rendered from its own snapshot).
+  static Future<_Message> _message(
+    String requestedType, {
+    int variant = 0,
+    HodaContent? content,
+    DateTime? day,
+  }) async {
     try {
-      final content = await ContentRepository.loadDaily();
-      final picked = _select(content, requestedType, variant: variant);
+      // [content]/[day] are given when pre-rendering a future day; otherwise
+      // it is today's live selection.
+      final snapshot = content ?? await ContentRepository.loadDaily();
+      final picked =
+          _select(snapshot, requestedType, variant: variant, day: day);
       if (picked == null) return _fallbackMessage;
 
       final item = picked.value;
@@ -1322,6 +1391,7 @@ class NotificationService {
     HodaContent content,
     String type, {
     int variant = 0,
+    DateTime? day,
   }) {
     final typed = _typedDailyItems(content);
     final normalized = NotificationSchedule.normalizeType(type);
@@ -1332,8 +1402,10 @@ class NotificationService {
       return null;
     }
     if (typed.isEmpty) return null;
-    final now = DateTime.now();
-    final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays;
+    final now = day ?? DateTime.now();
+    final dayOfYear = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(now.year, 1, 1))
+        .inDays;
     return typed[(dayOfYear + variant) % typed.length];
   }
 

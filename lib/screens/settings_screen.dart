@@ -18,8 +18,8 @@ import '../widgets/section_header.dart';
 import 'onboarding_screen.dart' show kHodaEitaaUrl, openEitaaChannel;
 
 /// App version shown at the bottom of this screen. Keep in sync with the
-/// `version:` field in pubspec.yaml (currently 0.2.0).
-const String kHodaVersionFa = '۰.۲.۰';
+/// `version:` field in pubspec.yaml (currently 0.2.1).
+const String kHodaVersionFa = '۰.۲.۱';
 
 /// Icon for a notification content type.
 IconData _iconForType(String type) {

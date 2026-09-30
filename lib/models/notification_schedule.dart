@@ -46,6 +46,34 @@ class NotificationSchedule {
   /// Unique plugin notification id for this schedule.
   int get notificationId => baseNotificationId + id;
 
+  /// How many days ahead each schedule is pre-armed.
+  ///
+  /// Each day gets its own one-shot notification carrying *that day's*
+  /// content, so the daily cards change at midnight even when the app is never
+  /// opened. The last slot repeats daily as a safety net (see
+  /// `NotificationService._armSchedule`). 5 schedules × 14 days = 70 alarms,
+  /// far below Android's 500-alarms-per-app ceiling.
+  static const int horizonDays = 14;
+
+  /// Plugin ids of the per-day notifications: `2000 + id*50 + dayOffset`,
+  /// i.e. 2000..2013, 2050..2063, … — outside the legacy 1000..1004 range and
+  /// the test/preview ids (1100, 1200+).
+  static const int dailyBaseNotificationId = 2000;
+  static const int _idsPerSchedule = 50;
+
+  int notificationIdForDay(int dayOffset) =>
+      dailyBaseNotificationId + id * _idsPerSchedule + dayOffset;
+
+  /// Every plugin id this schedule may own (legacy repeating id included).
+  List<int> get allNotificationIds => <int>[
+        notificationId,
+        for (var d = 0; d < horizonDays; d++) notificationIdForDay(d),
+      ];
+
+  /// Same as [allNotificationIds] for a slot id, without a schedule instance.
+  static List<int> idsForSlot(int slot) =>
+      NotificationSchedule(id: slot).allNotificationIds;
+
   TimeOfDay get time => TimeOfDay(hour: hour, minute: minute);
 
   /// Minutes since midnight — used for sorting and duplicate detection.

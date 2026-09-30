@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hoda/app.dart';
 import 'package:hoda/models/daily_content.dart';
+import 'package:hoda/models/notification_schedule.dart';
 import 'package:hoda/screens/settings_screen.dart';
 import 'package:hoda/services/content_repository.dart';
 import 'package:hoda/services/notification_service.dart';
@@ -113,6 +114,20 @@ void main() {
           .split(' ')
           .first;
       expect(strip(kHodaVersionFa), strip(expected));
+    });
+  });
+
+  group('per-day notification ids', () {
+    test('ids of all slots are unique and avoid test/preview ids', () {
+      final all = <int>[];
+      for (var slot = 0; slot < NotificationSchedule.maxCount; slot++) {
+        all.addAll(NotificationSchedule.idsForSlot(slot));
+      }
+      expect(all.toSet().length, all.length);
+      expect(all.contains(1100), isFalse);
+      for (var p = 1200; p < 1200 + NotificationSchedule.maxCount; p++) {
+        expect(all.contains(p), isFalse);
+      }
     });
   });
 }

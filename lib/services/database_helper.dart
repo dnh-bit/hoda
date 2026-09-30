@@ -182,6 +182,99 @@ class DatabaseHelper {
     return rows.first;
   }
 
+  /// Read-only twin of [_pickDaily]: returns the row [table] will show on the
+  /// local calendar day of [day], **without writing any state**.
+  ///
+  /// Used to pre-render future days' notifications. It applies exactly the
+  /// arithmetic [_pickDaily] will apply when that day actually comes
+  /// (`epoch + (dayIndex − storedDay)`, same seed, same deck), so the
+  /// notification for a given day shows the very card the home screen will
+  /// show that day — even if the app is never opened in between.
+  ///
+  /// The «تغییر محتوا» button changes the seed/epoch; it re-arms the
+  /// notifications right after, so future days are recomputed from the new
+  /// state.
+  static Future<Map<String, dynamic>?> _peekDaily(
+      Database db, String table, DateTime day) async {
+    final rows = await db.query(table, orderBy: 'id');
+    if (rows.isEmpty) return null;
+    final ids = rows.map((r) => (r['id'] as num).toInt()).toList();
+
+    final targetIndex = _dayIndex(day);
+    final stateRows = await db
+        .query('shuffle_state', where: 'table_name = ?', whereArgs: [table]);
+    int epoch = targetIndex;
+    int seed = _stableSeed(table);
+    if (stateRows.isNotEmpty) {
+      final shown = (stateRows.first['shown_ids'] as String?) ?? '';
+      final parts = shown.split('|');
+      final parsed = int.tryParse(parts.first);
+      epoch = (parsed != null && parsed >= 0) ? parsed : 0;
+      // Legacy rows without a day stamp are stamped «today» by _pickDaily on
+      // the next open; mirror that assumption here.
+      final storedDay =
+          (parts.length > 1 ? int.tryParse(parts[1]) : null) ?? _dayIndex();
+      if (targetIndex > storedDay) epoch += targetIndex - storedDay;
+      final storedSeed = (stateRows.first['last_index'] as num?)?.toInt();
+      if (storedSeed != null && storedSeed > 0) seed = storedSeed;
+    }
+
+    final deck = _shuffledIds(ids, seed);
+    final pickedId = deck[epoch % deck.length];
+    for (final r in rows) {
+      if ((r['id'] as num).toInt() == pickedId) return r;
+    }
+    return rows.first;
+  }
+
+  /// The `zekr` row for the weekday of [day] (Persian week, Saturday first).
+  static Future<Map<String, dynamic>?> _zekrFor(
+      Database db, DateTime day) async {
+    const daysFa = [
+      'شنبه',
+      'یکشنبه',
+      'دوشنبه',
+      'سه‌شنبه',
+      'چهارشنبه',
+      'پنجشنبه',
+      'جمعه',
+    ];
+    final dayName = daysFa[(day.weekday + 1) % 7];
+    // The `day` column was authored with ZWNJ («سه‌شنبه») and can drift in
+    // spelling across content refreshes, so match on a normalized form.
+    String normalize(String input) => input
+        .replaceAll('\u200c', ' ') // ZWNJ -> space
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll('ي', 'ی')
+        .replaceAll('ك', 'ک')
+        .trim();
+    final wanted = normalize(dayName);
+    final allZekr = await db.query('zekr');
+    for (final row in allZekr) {
+      if (normalize((row['day'] ?? '') as String) == wanted) return row;
+    }
+    final any = await db.query('zekr', limit: 1);
+    return any.isNotEmpty ? any.first : null;
+  }
+
+  /// The selection that will be shown on the local day of [day], computed
+  /// read-only (see [_peekDaily]). Returns `null` on failure.
+  static Future<Map<String, dynamic>?> getDailyContentForDay(
+      DateTime day) async {
+    try {
+      final db = await database;
+      return {
+        'verse': await _peekDaily(db, 'verses', day),
+        'hadith': await _peekDaily(db, 'hadiths', day),
+        'nahj': await _peekDaily(db, 'nahj_wisdoms', day),
+        'martyr': await _peekDaily(db, 'martyrs', day),
+        'zekr': await _zekrFor(db, day),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Deterministic seed per table (stable across launches for the same content).
   static int _stableSeed(String table) {
     var h = 0x811c9dc5;
@@ -234,40 +327,14 @@ class DatabaseHelper {
     try {
       final db = await database;
 
-      // Persian week starts on Saturday; DateTime.weekday is Mon=1..Sun=7.
-      const daysFa = [
-        'شنبه',
-        'یکشنبه',
-        'دوشنبه',
-        'سه‌شنبه',
-        'چهارشنبه',
-        'پنجشنبه',
-        'جمعه',
-      ];
-      final dayName = daysFa[(DateTime.now().weekday + 1) % 7];
-      // The `day` column was authored with ZWNJ («سه‌شنبه») and can drift in
-      // spelling across content refreshes, so match on a normalized form.
-      final normalize = (String input) => input
-          .replaceAll('\u200c', ' ') // ZWNJ -> space
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .replaceAll('ي', 'ی')
-          .replaceAll('ك', 'ک')
-          .trim();
-      final wanted = normalize(dayName);
-      final allZekr = await db.query('zekr');
-      var zekrRows = allZekr
-          .where((row) => normalize((row['day'] ?? '') as String) == wanted)
-          .toList();
-      if (zekrRows.isEmpty) {
-        zekrRows = await db.query('zekr', limit: 1);
-      }
+      final zekr = await _zekrFor(db, DateTime.now());
 
       return {
         'verse': await _pickDaily(db, 'verses', forceSeed: forceSeed),
         'hadith': await _pickDaily(db, 'hadiths', forceSeed: forceSeed),
         'nahj': await _pickDaily(db, 'nahj_wisdoms', forceSeed: forceSeed),
         'martyr': await _pickDaily(db, 'martyrs', forceSeed: forceSeed),
-        'zekr': zekrRows.isNotEmpty ? zekrRows.first : null,
+        'zekr': zekr,
       };
     } catch (_) {
       return null;

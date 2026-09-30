@@ -207,6 +207,13 @@ class ContentRepository {
     return _buildDaily(daily);
   }
 
+  /// The selection that will be shown on the local day of [day], without
+  /// advancing any rotation state. Used to pre-render future notifications.
+  static Future<HodaContent> loadDailyFor(DateTime day) async {
+    final daily = await DatabaseHelper.getDailyContentForDay(day);
+    return _buildDaily(daily);
+  }
+
   /// Re-picks every daily slot through [DatabaseHelper.getDailyContentShuffled]
   /// and returns the new selection. The rotation state advances, so the next
   /// cards differ from the ones just shown.

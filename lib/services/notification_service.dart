@@ -978,10 +978,22 @@ class NotificationService {
   /// rotation). The text and the `uid` in the payload therefore always match
   /// the card the home screen shows on that day, with the app closed.
   ///
-  /// The last day of the horizon is armed as a *repeating* notification: if
-  /// the app stays closed for more than two weeks the user still gets a daily
-  /// notification (repeating that last card) instead of silence. Any app
-  /// start re-arms the whole window again via [restoreSchedule].
+  /// ## Why nothing may repeat (the «two notifications per hour» bug)
+  ///
+  /// That safety net is what doubled the notifications in 0.2.1. The plugin's
+  /// Android side does not honour the requested date when
+  /// `matchDateTimeComponents` is set: it rewrites `scheduledDateTime` to the
+  /// next occurrence of that hour *from now*
+  /// (`getNextFireDateMatchingDateTimeComponents`, flutter_local_notifications
+  /// 17.x). The "day 13" alarm therefore landed on the very same instant as
+  /// day 0's one-shot and then re-fired every single day — two notifications
+  /// at every configured hour, both with a body meant for different days.
+  ///
+  /// There is no way around it: a daily repeat always starts *now*, so it can
+  /// never sit behind a window of one-shots without doubling them. The horizon
+  /// stands alone and is renewed by every app start ([restoreSchedule]); past
+  /// the horizon notifications pause until the next launch, which is why the
+  /// window is a month rather than a few days.
   static Future<bool> _armSchedule(
     NotificationSchedule schedule, {
     required bool exact,
@@ -1037,12 +1049,10 @@ class NotificationService {
         day: local,
       );
       final id = schedule.notificationIdForDay(offset);
-      final repeat = offset == horizon - 1;
 
       var ok = await _guard(
         'zonedSchedule(#${schedule.id}+$offset, exact: $useExact)',
-        () => _zonedSchedule(schedule, id, when, message,
-            exact: useExact, repeatDaily: repeat),
+        () => _zonedSchedule(schedule, id, when, message, exact: useExact),
       );
       // `exact_alarms_not_permitted` can still be thrown if the permission was
       // revoked between the check and the call: fall back to inexact for the
@@ -1051,8 +1061,7 @@ class NotificationService {
         useExact = false;
         ok = await _guard(
           'zonedSchedule(#${schedule.id}+$offset, exact: false)',
-          () => _zonedSchedule(schedule, id, when, message,
-              exact: false, repeatDaily: repeat),
+          () => _zonedSchedule(schedule, id, when, message, exact: false),
         );
       }
       if (offset == 0) firstOk = ok;
@@ -1071,7 +1080,6 @@ class NotificationService {
     tz.TZDateTime when,
     _Message message, {
     required bool exact,
-    bool repeatDaily = false,
   }) {
     return _plugin.zonedSchedule(
       notificationId,
@@ -1084,9 +1092,10 @@ class NotificationService {
           : AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      // One-shot for each pre-rendered day; only the horizon's last slot
-      // repeats, as a fallback for a very long absence.
-      matchDateTimeComponents: repeatDaily ? DateTimeComponents.time : null,
+      // Always null on purpose: matchDateTimeComponents makes the plugin
+      // re-aim the alarm at the next occurrence of this hour from *now* and
+      // repeat it daily, which fires next to the pre-armed one-shot of the
+      // same day (the 0.2.1 double-notification bug). See [_armSchedule].
       payload: _payloadFor(schedule.type, message.resolvedType, message.uid),
     );
   }

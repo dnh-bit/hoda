@@ -129,5 +129,34 @@ void main() {
         expect(all.contains(p), isFalse);
       }
     });
+
+    test('horizon stays inside the per-slot id stride', () {
+      // `_idsPerSchedule` is 50; a wider horizon would make two slots share
+      // an id and silently drop each other's notifications.
+      expect(NotificationSchedule.horizonDays, lessThan(50));
+    });
+  });
+
+  group('0.2.1 double-notification regression', () {
+    test('arming never requests a repeating notification', () {
+      // flutter_local_notifications ignores the date we hand it whenever
+      // matchDateTimeComponents is set: its Android side rewrites
+      // scheduledDateTime to the next occurrence of that hour from *now*
+      // (getNextFireDateMatchingDateTimeComponents) and repeats daily. The
+      // 0.2.1 horizon's last day was armed that way as a "safety net" and so
+      // fired on the same instant as day 0's one-shot — two notifications at
+      // every configured hour. Only comments may mention the parameter.
+      final lines = File('lib/services/notification_service.dart')
+          .readAsStringSync()
+          .split('\n')
+          .where((l) =>
+              !l.trimLeft().startsWith('///') && !l.trimLeft().startsWith('//'))
+          .join('\n');
+      expect(
+        lines.contains('matchDateTimeComponents:'),
+        isFalse,
+        reason: 'every armed notification must be a one-shot',
+      );
+    });
   });
 }

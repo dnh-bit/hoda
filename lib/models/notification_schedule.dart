@@ -50,14 +50,16 @@ class NotificationSchedule {
   ///
   /// Each day gets its own one-shot notification carrying *that day's*
   /// content, so the daily cards change at midnight even when the app is never
-  /// opened. The last slot repeats daily as a safety net (see
-  /// `NotificationService._armSchedule`). 5 schedules × 14 days = 70 alarms,
-  /// far below Android's 500-alarms-per-app ceiling.
-  static const int horizonDays = 14;
+  /// opened. Nothing repeats — a daily repeat cannot sit behind this window
+  /// without doubling it (see `NotificationService._armSchedule`). The window
+  /// is renewed by every app start. 5 schedules × 30 days = 150 alarms, far
+  /// below Android's 500-alarms-per-app ceiling.
+  static const int horizonDays = 30;
 
   /// Plugin ids of the per-day notifications: `2000 + id*50 + dayOffset`,
-  /// i.e. 2000..2013, 2050..2063, … — outside the legacy 1000..1004 range and
-  /// the test/preview ids (1100, 1200+).
+  /// i.e. 2000..2029, 2050..2079, … — outside the legacy 1000..1004 range and
+  /// the test/preview ids (1100, 1200+). The stride (50) has to stay larger
+  /// than [horizonDays] or two slots would share an id.
   static const int dailyBaseNotificationId = 2000;
   static const int _idsPerSchedule = 50;
 
